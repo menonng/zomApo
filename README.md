@@ -42,6 +42,7 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 | [docs/server/version-policy.md](docs/server/version-policy.md) | 26.3 → 26.4 버전 정책과 업그레이드 절차 |
 | [docs/server/simulation.md](docs/server/simulation.md) | 인원·활성 인구별 플레이 양상과 재미도 시뮬레이션 |
 | [docs/server/roadmap.md](docs/server/roadmap.md) | 개발 일정과 시즌 1 운영 일정 |
+| [docs/server/privacy.md](docs/server/privacy.md) | 개인정보와 데이터: 보관 정책, 외부 노출 지점, 가입 동의 항목 |
 
 ### zomApo 설계
 | 문서 | 내용 |

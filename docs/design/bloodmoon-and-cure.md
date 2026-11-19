@@ -76,6 +76,8 @@ bloodmoon.forceAfterHours=72 bloodmoon.forceMinPlayers=2
 
 ## 2. 치료제
 
+> **결정: 아래 공동 연구안도 채택하지 않았다.** 친구들의 목적의식과 시간 맞추기에 기대는 구조라서, 게이지 없는 '백신 조각 엔딩 분기'로 줄였다([decisions.md](../server/decisions.md) 4-5). 이 절은 검토 기록으로 남긴다.
+
 ### 2-1. 원안(국가별 5단계 레이스)의 문제
 
 | 문제 | 근거 |
