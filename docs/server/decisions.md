@@ -188,6 +188,7 @@
   - 전서구는 닭 엔티티다. zomApo 의 좀비 변환·좀비 기수(아기 좀비가 닭을 타는 바닐라 동작) 대상에서 `courierpost_bird` 태그를 가진 개체를 뺀다.
   - 디스코드 연동은 채팅을 중계하지 않고 시스템 이벤트(사망, 접속, 국가 이벤트)만 보낸다. 채팅을 중계하면 전서구 지연이 무의미해진다.
   - 표시 이름: couriersRoost 가 발신자 이름을 `getName()` 으로 쓰는지 표시 이름으로 쓰는지 확인하고, 커스텀 닉네임이 보이도록 맞춘다.
+  - **채팅 경로: 그냥 치는 채팅은 국가(바닐라 팀) 채팅, 전체 채팅은 `/g <메시지>` 로만.** couriersRoost 는 원래 모든 채팅을 전체 전서구로 보낸다. simpleNationWar 가 Fabric 채팅 이벤트의 앞선 단계에서 먼저 받아 바닐라 `/teammsg` 전송부로 돌리고, couriersRoost 의 팀 채팅 믹스인이 그것을 전서구로 배달한다. `global_chat_cooldown` 은 `/g` 에만 걸린다. 26.3 에서 두 모드를 함께 띄워 경로를 확인했다. 자세한 규칙은 simpleNationWar [commands.md](https://github.com/menonng/simpleNationWar/blob/HEAD/docs/design/commands.md) '채팅'.
 
 ### 8-3. biomesmod: 미채택
 
