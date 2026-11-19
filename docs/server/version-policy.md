@@ -1,0 +1,53 @@
+# 버전 정책: 26.3 → 26.4
+
+## 1. 방침
+
+- **개발·테스트는 26.3** 에서 한다.
+- **26.4 가 정식 출시되면 바로 올린다.** 두 버전을 동시에 지원하지 않는다. 26.4 로 올린 뒤에는 26.3 빌드를 유지하지 않는다.
+- **운영 월드는 26.4 에서 새로 만든다.** 26.3 테스트 월드를 업그레이드해서 쓰지 않는다. 새 버전 지형(얼음 동굴 등)은 새로 생성되는 청크에만 생기므로, 사전 생성까지 26.4 에서 해야 보더 안 전역에 들어간다.
+
+## 2. 현재 상황 (2026-11-19 조사)
+
+| 항목 | 상태 |
+|---|---|
+| 26.3 | 출시됨 ("Wilderness Bound"). 데이터팩 포맷 121.0 |
+| 26.4 | 스냅샷 진행 중. 10월 말 기준 스냅샷 6 이후. 공식 출시일 미발표, 겨울 드롭 전례로 12월 초~중순 예상(제3자 추정) |
+| 26.4 주요 추가 | 얼음 동굴(고드름, 얼음 결정), **새 좀비 변종 '프로스트바이트'**, 얼음 공(Ice Ball), 빙결 포션 |
+
+### 프로스트바이트와 zomApo
+
+스냅샷 기준 공개 내용: 설원 바이옴에 스폰, 가까우면 근접 공격으로 얼리고(가죽 방어구가 일부 막아 줌) 멀면 얼음 공을 던진다. 물속에 오래 있으면 일반 좀비로 바뀐다. 얼음 공을 떨어뜨리고, 얼음 공으로 빙결 포션을 만든다.
+
+zomApo 에서는 바닐라 좀비 계열이므로 변환 대상이 아니라 **변종 롤 대상**이다. 설원 바이옴에서 일반 좀비 스폰의 일부를 프로스트바이트로 두고, 점수표에 넣는다([mobs.md](../design/mobs.md)). 이름과 동작은 정식 출시 때 바뀔 수 있다.
+
+## 3. 26.x Fabric 개발 환경 요점
+
+사용자의 다른 26.x 저장소(couriersRoost, InfraCraft, biomesmod)에서 확인된 사항이다.
+
+- 26.x 부터 Fabric 은 **Yarn 매핑을 쓰지 않는다.** Mojang 공식 이름을 그대로 쓰고, Loom 이 리매핑하지 않는다. `mappings` 선언도 `modImplementation` 도 없다.
+- Gradle 플러그인 id 는 `net.fabricmc.fabric-loom` (couriersRoost 는 Loom 1.17.19, biomesmod 는 1.19.3).
+- Java 25 필수. Gradle 툴체인에 JDK 25 를 둔다.
+- API 시그니처는 기억이나 위키보다 **Loom 이 뽑아낸 실제 jar 를 `javap` 로 열어 확인**한다(couriersRoost HANDOFF 의 방법).
+- 26.x 에서 바뀐 이름 예: `ResourceLocation` → `Identifier`, 권한 체계 개편(`net.minecraft.server.permissions`), 게임룰 패키지 이동, `GameProfile` 레코드화, `Entity.getServer()` 제거, 엔티티 타입 상수가 `EntityTypes` 로 이동. 26.3 에서 `setInvulnerable` → `setPermanentlyInvulnerable`, 발전과제 `DisplayInfo` 레코드화.
+
+## 4. 업그레이드 절차 (26.4 출시일)
+
+1. `gradle.properties` 의 `minecraft_version`, `fabric_api_version` 을 26.4 로 바꾼다. Loader·FLK 최소 버전 확인.
+2. `./gradlew build` 로 컴파일 오류 목록을 뽑는다. 믹스인 대상 메서드는 `javap` 로 26.4 jar 에서 다시 확인한다.
+3. 서버 게임테스트(`runGameTest`)와 헤드리스 서버 기동 테스트를 돌린다.
+4. 외부 의존 모드(BlueMap, squaremap, couriersRoost, Chunky, Lithium, Ledger)의 26.4 빌드를 확인한다. couriersRoost 는 직접 포팅한다.
+5. canvasworldgen 데이터팩의 포맷 번호와 생성 결과를 확인한다.
+6. 26.4 로 테스트 월드를 새로 만들어 좀비 변환·감염 레벨·지도 마커를 확인한다.
+7. 확인되면 운영 월드를 생성하고 Chunky 로 사전 생성, BlueMap 첫 렌더를 돌린다.
+
+## 5. 개장 게이트
+
+| 조건 | 미충족 시 |
+|---|---|
+| 26.4 정식 출시 + Fabric API | 26.3 으로 개장하고 시즌 중 업그레이드하지 않는다(새 지형이 보더 밖에만 생기므로) |
+| 직접 만든 모드 3종 26.4 빌드 통과 | 개장 연기 |
+| BlueMap 또는 squaremap 중 하나 26.4 지원 | 지도 없이 개장, 지원되는 대로 추가 |
+| couriersRoost 26.4 포팅 | 없이 개장 가능 (선택 요소) |
+| canvasworldgen 26.4 동작 | 바닐라 생성 + 시드 탐색으로 대체 |
+
+판단 기한은 **2027-01-02**. 그때까지 26.4 가 나오지 않으면 26.3 으로 개장한다.
