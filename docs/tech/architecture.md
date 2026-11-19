@@ -13,8 +13,11 @@
 | Gradle 플러그인 | `net.fabricmc.fabric-loom` (리매핑 없음, Mojang 이름) | 26.x 는 Yarn 없음 |
 | 환경 | `"environment": "server"` | 바닐라 클라이언트 접속 |
 | 설정 직렬화 | kotlinx.serialization (JSON) | |
+| 의존성 버전 | `gradle/libs.versions.toml` (버전 카탈로그) | monun 의 paper-sample 과 같은 방식. 26.4 로 올릴 때 한 파일만 고친다 |
 
 외부 런타임 의존(필수)은 Fabric API 와 FLK 뿐이다. simpleNationWar(`snw-api`)는 선택 의존이다.
+
+**Kotlin 라이브러리는 모드 jar 에 넣지 않는다.** FLK 가 Kotlin 표준 라이브러리, kotlinx.coroutines, kotlinx.serialization 을 런타임으로 제공한다(monun 의 kotlin-plugin 이 Bukkit 에서 하던 역할). 모드마다 따로 넣으면 버전 충돌이 난다.
 
 ## 2. 서버 사이드 제약과 해법
 
@@ -29,12 +32,19 @@
 
 ## 3. 모듈과 패키지
 
-단일 Gradle 프로젝트로 시작한다. 26.4 로 올린 뒤에는 26.3 을 유지하지 않으므로 버전별 서브프로젝트는 만들지 않는다.
+서브프로젝트 두 개로 나눈다. monun 의 speculation 이 게임 로직(`core`)과 마인크래프트 표시(`plugin`)를 나눈 것과 같은 생각이다. 26.4 로 올린 뒤에는 26.3 을 유지하지 않으므로 버전별 서브프로젝트는 만들지 않는다.
+
+| 서브프로젝트 | 내용 | 테스트 |
+|---|---|---|
+| `logic` | 마인크래프트를 모르는 순수 Kotlin: 감염 레벨 식(전역 램프, 국가 열기, 정화, 개인 보정), 장비 점수, 점수 보정·농장 감쇠, 변종 가중치 추첨, 강화 확률·찬스 타임, 블러드문 웨이브 구성 | JUnit. 밀리초 단위로 돌고, 시뮬레이터 수치와 대조할 수 있다 |
+| `mod` | Fabric 모드. `logic` 을 jar 안에 포함하고 엔티티·월드·GUI 를 다룬다 | 서버 게임테스트 |
 
 ```
 zomApo/
-├─ build.gradle.kts, gradle.properties, settings.gradle.kts
-├─ src/main/kotlin/dev/menonng/zomapo/
+├─ build.gradle.kts, gradle.properties, settings.gradle.kts, gradle/libs.versions.toml
+├─ logic/src/main/kotlin/dev/menonng/zomapo/logic/   infection/, score/, starforce/, spawn/
+├─ logic/src/test/kotlin/…
+├─ mod/src/main/kotlin/dev/menonng/zomapo/
 │  ├─ ZomApo.kt                     진입점, 서비스 연결
 │  ├─ config/                       설정 데이터 클래스, 다시 읽기
 │  ├─ infection/                    감염 레벨 계산(전역 램프, 국가 열기, 정화, 영역 판정), 둥지, 블러드문
@@ -51,16 +61,16 @@ zomApo/
 │  ├─ gui/                          상자 메뉴 DSL
 │  ├─ command/                      관리자 명령 (Brigadier Kotlin DSL)
 │  └─ util/                         틱 스케줄러, 코루틴 디스패처, 시간
-├─ src/main/java/…/mixin/           믹스인 (자바)
-├─ src/main/resources/
+├─ mod/src/main/java/…/mixin/       믹스인 (자바)
+├─ mod/src/main/resources/
 │  ├─ fabric.mod.json, zomapo.mixins.json
 │  └─ data/zomapo/ …                태그, 루트 테이블, 인첸트 데이터팩
-└─ src/gametest/                    서버 게임테스트
+└─ mod/src/gametest/                서버 게임테스트
 ```
 
 ## 4. monun 저장소에서 가져올 패턴
 
-[monun](https://github.com/monun) 의 저장소는 Paper 플러그인이고 모두 보관(archived) 상태다. 코드는 GPL-3.0 이므로 **복사하지 않고 설계만 참고**한다. Fabric 은 Bukkit 이벤트가 없으므로 같은 생각을 믹스인 + 부착으로 옮긴다.
+[monun](https://github.com/monun) 의 공개 저장소 16개 전체 분석은 [reference/monun.md](../reference/monun.md). 대부분 Paper 플러그인이고 보관(archived) 상태다. 코드는 GPL-3.0 이므로 **복사하지 않고 설계만 참고**한다. Fabric 은 Bukkit 이벤트가 없으므로 같은 생각을 믹스인 + 부착으로 옮긴다.
 
 | monun 쪽 | 무엇을 하는가 | zomApo 에서 |
 |---|---|---|
@@ -74,7 +84,18 @@ zomApo/
 | psychics `AbilityConcept` / `Ability` | **정적 설정(개념)** 과 **런타임 인스턴스** 분리. 개념은 설정 파일에서 읽고, 인스턴스는 플레이어마다 생긴다 | `FormConcept`(JSON: 체력, 속도, 크기, 장비, 점수, 레벨별 가중치) / `FormBehavior`(엔티티마다). 밸런스 조정 = JSON 수정 |
 | psychics `TestResult` | 능력 사용 가능 여부를 봉인 클래스로 반환 | 강화 시도 가능 여부(재료 부족, 최대 성 등)를 봉인 결과로 |
 | kommand | Brigadier 위 Kotlin DSL (`then("name" to string()) { executes { … } }`) | 작은 자체 DSL. 관리자 명령만 있으므로 가볍게 |
-| invfx | 상자 GUI Kotlin DSL (Frame, Button, Pane, List) | 강화 GUI 용 상자 메뉴 DSL. simpleNationWar 와 같은 모양으로 맞춘다 |
+| invfx | 상자 GUI Kotlin DSL (Frame, Slot, Pane, List) | 강화 GUI 용 상자 메뉴 DSL. simpleNationWar 와 같은 모양으로 맞춘다 |
+| tap `Ticker` 세 모드 | plank(게임 틱), precision(실제 시간, 밀린 틱 몰아서 실행), flex(실제 시간, 밀린 실행 한 번) | 몹 AI·쿨다운은 게임 틱, **블러드문 30분·06:00 재계산·망자 보호 10분은 실제 시간 기준**. 렉이 걸려도 이벤트 길이가 늘지 않는다 |
+| tap `ConfigSupport` 범위 어노테이션 | 범위 밖 설정값을 잘라냄 | 설정 데이터 클래스에 범위 검증(확률 0~1, 레벨 0~5) |
+| series-survival `TickTask` | 설정 파일 수정 시각이 바뀌면 다음 틱에 자동으로 다시 읽음 | `/zomapo reload` 와 함께 자동 리로드 |
+| tap `TemplateSupport` | 설정 문자열의 `$이름`, `${식}` 치환 | 모든 안내 문구(액션바, 알림, lore)를 설정 템플릿으로. 문구 수정에 재빌드 불필요 |
+| series-survival 진영별 `FakeEntityServer` | 생존자 머리 위 좀비 머리 마커를 **좀비 진영에게만** 보여 줌 | 망자 마커(본인·자국민만), 등불 인첸트 발광(본인만) |
+| series-survival 하이퍼 좀비 | 스코어보드 팀 색으로 발광 테두리 색을 바꿈 | 알파 좀비를 전용 팀(빨강)에 넣어 빨간 테두리 발광 |
+| psychics `DamageType` | 피해 종류를 보호 인첸트와 묶음 | 변종 특수 공격은 바닐라 피해 유형(투사체·폭발·마법)으로 → 보호 인첸트가 그대로 먹힘 |
+| psychics `TooltipBuilder` | 제목·머리말·본문·꼬리말로 아이템 설명 조립 | 스타포스 lore, 바이러스 결정 설명 |
+| psychics 자원 소유권 | 능력 인스턴스가 자기 스케줄러·가짜 엔티티·리스너를 소유하고 해제 시 정리 | `FormBehavior` 가 만든 예약 작업·가짜 엔티티를 엔티티 사망·언로드 시 함께 정리 |
+| speculation `core` / `plugin` | 순수 게임 로직과 마인크래프트 표시 계층 분리, 로직은 JUnit 테스트 | `logic` / `mod` 서브프로젝트 (3절) |
+| speculation `GameDialog<R>` + 코루틴 | 코어가 `suspend` 로 플레이어 입력을 요청, 표시 계층이 처리기 제공, 없으면 기본값 | 바닐라 다이얼로그를 `suspend fun <R> ask(…, timeout, default)` 로 감싸 강화 확인 등에 사용 |
 
 ## 5. 데이터 저장
 
@@ -102,6 +123,7 @@ simpleNationWar 가 없으면: 모든 땅을 황야로 계산하고, 자국민 �
 
 ## 7. 테스트
 
+- **`logic` 단위 테스트**: 감염 레벨 식의 경계값(0·5 클램프, 솔로 상한), 점수 보정 조합, 강화 확률 표·찬스 타임, 변종 가중치 분포. 시뮬레이터([tools/sim](../../tools/sim))와 같은 입력을 넣어 같은 값이 나오는지 대조한다.
 - **서버 게임테스트**: 변환 확률 경계, 루트 이중 굴림, 점수 보정, 망자 생성·회수, 강화 확률 표.
 - **헤드리스 서버 기동 CI**: InfraCraft 의 modpack 워크플로처럼 실제 서버를 띄워 모드가 켜지는지 확인한다. 26.4 업그레이드 때 가장 먼저 깨지는 지점을 잡는다.
 - **시뮬레이터**: 밸런스 수치를 바꿀 때 [tools/sim](../../tools/sim) 을 같이 돌린다.

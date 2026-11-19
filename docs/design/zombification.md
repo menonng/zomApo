@@ -165,5 +165,7 @@ E = min(1, 인첸트 레벨 합 / 30 + 스타 합 / 60)
 - 청크마다 값을 저장하지 않는다. 영역 레벨은 `(전역 램프, 국가별 H·정화, 영토·접경 판정, 희소한 이벤트 보정 목록)` 으로 즉석 계산하고, 국가별 접경 청크 집합은 영토가 바뀔 때만 BFS 로 다시 만든다.
 - 저장: `SavedData` 하나(`zomapo_infection`). 전역 램프 보정, 국가별 일일 스냅샷(K7·N7·H·정화·레벨 이력), 이벤트 보정 목록(종류, 범위, 값, 만료), 둥지 목록.
 - 갱신: 매일 06:00 에 국가별 H 를 다시 계산하고, 이벤트 보정은 발생 즉시 반영한다.
+- 시간 기준: 06:00 재계산, 블러드문 30분, 정화 7일 만료는 **실제 시간** 기준 스케줄러로 돈다. 게임 틱 기준으로 돌리면 렉이 걸릴 때 블러드문이 길어진다(monun tap `Ticker` 의 flex 모드와 같은 생각).
+- 식 자체(전역 램프, H, 정화, 개인 보정, 장비 점수)는 마인크래프트 의존이 없는 `logic` 모듈에 두고 단위 테스트한다([architecture.md](../tech/architecture.md) 3절).
 - 관리자 명령: `/zomapo level get|set|clear`, `/zomapo bloodmoon start|stop`, `/zomapo nest spawn`, `/zomapo reload`, `/zomapo debug spawn <변종>`.
 - 국가·영토 정보는 simpleNationWar 의 `snw-api` 로 읽는다. simpleNationWar 가 없으면 모든 땅을 황야로 본다.
