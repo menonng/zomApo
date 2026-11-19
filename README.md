@@ -5,7 +5,21 @@
 같은 서버에서 함께 도는 국가 모드는 별도 저장소 [simpleNationWar](https://github.com/menonng/simpleNationWar) 에 있다.
 두 모드는 따로 빌드·배포하고, zomApo 가 simpleNationWar 의 공개 API(`snw-api`)를 선택적으로 읽는 한 방향 의존만 둔다.
 
-> **현재 단계: 기획 문서.** 코드는 아직 없다. 테스트 대상은 Minecraft 26.3, 26.4 정식 출시 즉시 26.4 로 올린다. 서버 운영 예정은 2027년 1월 중순 ~ 2월 초(약 3주).
+> **현재 단계: 개발 시작.** 빌드 골격과 순수 로직(감염 레벨, 변종 추첨, 좀비 점수, 스타포스)이 들어왔다. 테스트 대상은 Minecraft 26.3, 26.4 정식 출시 즉시 26.4 로 올린다. 서버 운영 예정은 2027년 1월 중순 ~ 2월 초(약 3주).
+
+## 빌드
+
+JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼가 받는다.
+
+```
+./gradlew buildAll          # logic 단위 테스트 + 모드 jar (mod/build/libs/)
+./gradlew :mod:runServer    # 26.3 전용 서버를 띄워 모드가 켜지는지 확인(스모크 테스트)
+```
+
+| 모듈 | 내용 |
+|---|---|
+| `logic` | 마인크래프트를 모르는 순수 Kotlin. 문서의 식을 옮기고 JUnit 으로 고정한다 |
+| `mod` | Fabric 서버 모드. `logic` 을 jar 안에 포함한다 |
 
 ## 한눈에 보기
 

@@ -1,0 +1,30 @@
+name: build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+      - uses: gradle/actions/setup-gradle@v6
+      - run: chmod +x ./gradlew
+      - name: logic 테스트 + mod 빌드
+        run: ./gradlew --no-parallel :logic:test :mod:build
+      - name: 스모크 테스트 (전용 서버 기동 후 종료)
+        run: |
+          timeout 900 ./gradlew --no-parallel :mod:runServer 2>&1 | tee server.log
+          grep -q "\[zomApo\] smoke test passed" server.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: zomapo
+          path: |
+            mod/build/libs/
+            logic/build/reports/tests/

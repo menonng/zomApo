@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "zomapo",
+  "version": "${version}",
+  "name": "zomApo",
+  "description": "좀비 아포칼립스 야생 서버 모드: 감염 레벨, 좀비 변환·변종, 망자 좀비, 스타포스. 서버 사이드 전용.",
+  "authors": ["menonng"],
+  "contact": { "sources": "https://github.com/menonng/zomApo" },
+  "license": "All-Rights-Reserved",
+  "environment": "server",
+  "entrypoints": {
+    "main": [{ "adapter": "kotlin", "value": "dev.menonng.zomapo.ZomApo" }]
+  },
+  "mixins": ["zomapo.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25",
+    "fabric-api": "*",
+    "fabric-language-kotlin": ">=${flk_version}"
+  },
+  "suggests": { "snw": "*" }
+}

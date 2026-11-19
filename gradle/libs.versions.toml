@@ -1,0 +1,13 @@
+[versions]
+kotlin = "2.4.21"
+loom = "1.19.4"
+junit = "5.13.4"
+
+[libraries]
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }
