@@ -407,9 +407,18 @@ def summary():
         print("  인원  엔티티  힙MB  MSPT중앙  MSPT95%  TPS")
         for x in r["rows"]:
             print(f"  {x['players']:>4}  {x.get('entities', 0):>6}  {x.get('live_heap_mb') or 0:>4}  {x.get('mspt_med', 0):>8}  {x.get('mspt_p95', 0):>7}  {x.get('tps_1m', 0)}")
+    import contextlib
+    import io
     sys.argv = ["fit_cost"] + files
-    print("\n비용 모델(load_sim.py --cost 에 넣는다):")
-    fc.main()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        fc.main()
+    cost = os.path.join(PERF, "results", "cost.json")
+    with open(cost, "w") as f:
+        f.write(buf.getvalue())
+    print(f"\n비용 모델 → {cost}")
+    print(buf.getvalue())
+    print("다음: python ../sim/load_sim.py --cost " + os.path.relpath(cost))
 
 
 def main():

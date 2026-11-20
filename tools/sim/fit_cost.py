@@ -48,8 +48,12 @@ def fit(points):
 
 
 def fit_nonneg(points):
-    """계수가 음수로 나오면(봇은 움직이지 않아 같은 무리 인원의 비용이 0 에 가깝다) 0 으로 두고 다시 적합한다."""
-    b = fit(points)
+    """계수가 음수로 나오면(봇은 움직이지 않아 같은 무리 인원의 비용이 0 에 가깝다) 0 으로 두고 다시 적합한다.
+    배치가 한 가지뿐이라 무리 수와 인원을 가를 수 없으면 인원 항을 0 으로 두고 2변수로 맞춘다."""
+    try:
+        b = fit(points)
+    except ZeroDivisionError:
+        b = [0.0, 0.0, -1.0]
     if b[2] < 0:
         # player 항을 0 으로 고정: y = base + area·x1 (2변수 최소제곱)
         n = len(points)
@@ -57,7 +61,10 @@ def fit_nonneg(points):
         sy = sum(y for _, y in points)
         sxx = sum(x[0] * x[0] for x, _ in points)
         sxy = sum(x[0] * y for x, y in points)
-        area = (n * sxy - sx * sy) / (n * sxx - sx * sx)
+        den = n * sxx - sx * sx
+        if den == 0:
+            raise ValueError("측정점이 모자라다(봇 수 단계를 2개 이상, 배치를 2가지 이상)")
+        area = (n * sxy - sx * sy) / den
         b = [(sy - area * sx) / n, area, 0.0]
     if b[0] < 0:
         b[0] = 0.0
@@ -77,6 +84,9 @@ def main():
             groups.setdefault(r["mods"], []).append((shape(r["layout"], row["players"]), row))
     out = {}
     for mods, pts in groups.items():
+        if len(pts) < 3:
+            print(f"# {mods}: 측정점 {len(pts)}개라 건너뜀", file=sys.stderr)
+            continue
         h = fit_nonneg([(x, row["live_heap_mb"]) for x, row in pts])
         med = fit_nonneg([(x, row["mspt_med"]) for x, row in pts])
         p95 = fit_nonneg([(x, row["mspt_p95"]) for x, row in pts])
