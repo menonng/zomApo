@@ -28,6 +28,7 @@ data class InfectionConfig(
 /**
  * 한 국가의 최근 72시간 활동.
  * [baseScore] = 국민 전원이 72시간 동안 얻은 기본 좀비 스코어 합(농장 감쇠 적용, 레벨 배율 제외: ZombieScore.forHeat).
+ * [activeMembers] = 72시간 동안 **잠수를 뺀 활동 시간**이 1시간 이상인 국민 수(snw-api 의 잠수 판정. 접속만 해 둔 사람으로 나눗셈을 키울 수 없다).
  */
 data class NationActivity(
     val baseScore: Double,

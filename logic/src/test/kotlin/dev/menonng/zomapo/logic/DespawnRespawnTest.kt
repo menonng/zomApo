@@ -145,20 +145,21 @@ class BloodMoonRespawnTest {
 
 class DeathMarkerAndRevenantTest {
     @Test
-    @DisplayName("화살표는 보는 방향 기준, 거리·높이 차, 도착하면 끔, 다른 차원이면 좌표")
+    @DisplayName("빛기둥: 96블록 안이면 진짜 자리, 멀면 그 방향 96블록에 옮겨 세움, 도착·다른 차원이면 없음")
     fun case01() {
-        // 남쪽(yaw 0)을 볼 때: 남 ↑, 서 →, 동 ←, 북 ↓
-        assertEquals("↑", DeathMarker.arrow(0.0, 0.0, 0f, 0.0, 10.0))
-        assertEquals("→", DeathMarker.arrow(0.0, 0.0, 0f, -10.0, 0.0))
-        assertEquals("←", DeathMarker.arrow(0.0, 0.0, 0f, 10.0, 0.0))
-        assertEquals("↓", DeathMarker.arrow(0.0, 0.0, 0f, 0.0, -10.0))
-        assertEquals("↑", DeathMarker.arrow(0.0, 0.0, 180f, 0.0, -10.0))
-        assertEquals("↗", DeathMarker.arrow(0.0, 0.0, 0f, -10.0, 10.0))
-        val target = DeathPoint("minecraft:overworld", 10, 30, 100)
-        assertEquals("사망 지점 ↑ 100m  ▼34", DeathMarker.actionBar("minecraft:overworld", 0.5, 64.0, 0.5, 0f, target))
-        assertNull(DeathMarker.actionBar("minecraft:overworld", 11.0, 31.0, 101.0, 0f, target))
-        assertEquals("사망 지점: 오버월드 10, 30, 100", DeathMarker.actionBar("minecraft:the_nether", 0.0, 64.0, 0.0, 0f, target))
-        assertEquals("쓰러진 곳: 오버월드 10, 30, 100 — 망자가 소지품을 들고 기다립니다.", DeathMarker.chatLine(target, DeathDrop.REVENANT))
+        val ow = "minecraft:overworld"
+        val near = DeathMarker.beam(ow, 0.5, 64.0, 0.5, DeathPoint(ow, 30, 70, 40))!!
+        assertFalse(near.projected)
+        assertEquals(30.5, near.x, 1e-9); assertEquals(70.0, near.baseY, 1e-9)
+        val far = DeathMarker.beam(ow, 0.5, 64.0, 0.5, DeathPoint(ow, 3000, 70, 0))!!
+        assertTrue(far.projected)
+        assertEquals(96.5, far.x, 1e-6); assertEquals(0.5, far.z, 1e-6)
+        assertEquals(3000.0, far.distance, 1e-6)
+        assertNull(DeathMarker.beam(ow, 31.0, 70.0, 41.0, DeathPoint(ow, 30, 70, 40)))
+        assertNull(DeathMarker.beam("minecraft:the_nether", 0.0, 64.0, 0.0, DeathPoint(ow, 30, 70, 40)))
+        val lines = DeathMarker.chatLines(DeathPoint(ow, 10, 30, 100), DeathDrop.REVENANT, listOf(DeathPoint("minecraft:the_nether", 1, 2, 3)))
+        assertEquals("쓰러진 곳: 오버월드 10, 30, 100 — 망자가 소지품을 들고 기다립니다. 빨간 빛기둥을 따라가세요.", lines[0])
+        assertEquals("남아 있는 망자: 네더 1, 2, 3", lines[1])
         assertTrue(DeathMarker.keepShowing(DeathDrop.REVENANT, 1_000_000, revenantPending = true))
         assertFalse(DeathMarker.keepShowing(DeathDrop.PRESERVED_DROP, 18_000, revenantPending = false))
     }

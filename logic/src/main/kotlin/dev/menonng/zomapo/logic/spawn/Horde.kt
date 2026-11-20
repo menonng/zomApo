@@ -31,6 +31,8 @@ object Horde {
         val protected: Boolean = false,
         /** 마지막으로 떼에게 노려진 뒤 지난 틱(없으면 매우 큼) */
         val ticksSinceLastHorde: Long = Long.MAX_VALUE,
+        /** 잠수(5분 입력 없음). 대상에서 빠지고 접속자 수에도 세지 않는다. */
+        val afk: Boolean = false,
     )
 
     data class Outcome(val target: String, val level: Int, val size: Int)
@@ -39,11 +41,11 @@ object Horde {
     const val PERSONAL_COOLDOWN_TICKS = 18_000L
 
     fun eligible(c: Candidate, cooldown: Long = PERSONAL_COOLDOWN_TICKS): Boolean =
-        c.level >= MIN_LEVEL && c.overworld && !c.protected && c.ticksSinceLastHorde >= cooldown
+        c.level >= MIN_LEVEL && c.overworld && !c.protected && !c.afk && c.ticksSinceLastHorde >= cooldown
 
-    /** 한 번의 시도. 접속자가 [MIN_ONLINE] 미만이거나 대상이 없거나 확률에 실패하면 null. [candidates] 는 오버월드 접속자 전원. */
+    /** 한 번의 시도. 잠수가 아닌 오버월드 접속자가 [MIN_ONLINE] 미만이거나 대상이 없거나 확률에 실패하면 null. [candidates] 는 오버월드 접속자 전원. */
     fun attempt(random: Random, candidates: List<Candidate>, cooldown: Long = PERSONAL_COOLDOWN_TICKS, minOnline: Int = MIN_ONLINE): Outcome? {
-        if (candidates.count { it.overworld } < minOnline) return null
+        if (candidates.count { it.overworld && !it.afk } < minOnline) return null
         val pool = candidates.filter { eligible(it, cooldown) }
         if (pool.isEmpty()) return null
         val target = pool[random.nextInt(pool.size)]

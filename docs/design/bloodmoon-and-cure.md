@@ -1,6 +1,6 @@
 # 블러드문과 치료제 검토
 
-> **상태: 제안 (확정 전).** 시즌 2027-01-16(토) ~ 2027-02-07(일), 23일 기준. 근거 수치는 [simulation.md](../server/simulation.md) 5·6절과 [tools/sim/results.md](../../tools/sim/results.md).
+> **상태: 블러드문은 확정(2026-11-21), 치료제는 제안.** 시즌 2027-01-16(토) ~ 2027-02-07(일), 23일 기준. 근거 수치는 [simulation.md](../server/simulation.md) 5·6절과 [tools/sim/results.md](../../tools/sim/results.md).
 >
 > **2026-11-20 인원 상향 반영**: 수치는 새 가정(20명/활성 10명, 범위 17/8~23/12)으로 다시 계산했다. 블러드문 발동 조건을 **3명·2개국 → 5명·3개국 모두**로 올렸다(1-6). 치료제 검토 결론은 그대로이고 비용 배수만 6 → 6.7 로 바뀌었다(2-3).
 
@@ -54,9 +54,9 @@
 |---|---|---|
 | 시간 기준 | **게임 시간**: 바닐라 달 주기의 보름달 밤(8 게임일마다) | **현실 시간**: 동시 접속 트리거 |
 | 빈도 | 접속이 이어지는 동안 현실 약 2시간 40분마다 한 번 → 한 세션에 한 번꼴 | 시즌 8~10회 |
-| 발동 조건 | 자동 | 19:00~24:00, 접속 **5명 이상 + 3개 국가 모두**, 마지막 블러드문 종료 후 48시간 경과 |
+| 발동 조건 | 자동 | 19:00~24:00, **잠수를 뺀** 접속 **5명 이상 + 3개 국가 모두**, 마지막 블러드문 종료 후 48시간 경과 |
 | 예고 | 해 질 녘 채팅 1줄 + 달 모양 | **10분 전** 인게임 타이틀 + 디스코드 `@생존자` 알림 |
-| 규모 | 접속자마다 주변에 1파(솔로가 감당할 크기, 레벨 보정) | 3파 + Lv4 이상이면 알파. 무작위로 고른 수도 하나 또는 생존자 캠프 습격. 회당 참가자가 평균 6명 안팎이므로 웨이브 몹 수는 참가자 수에 비례시킨다(수치 미정) |
+| 규모 | 접속자마다 주변에 1파(솔로가 감당할 크기, 레벨 보정) | 3파 + Lv4 이상이면 알파. 무작위로 고른 수도 하나 또는 생존자 캠프 습격. 웨이브 크기는 참가자 P 에 비례: 1파 4+3P, 2파 6+4P, 3파 8+5P(회당 평균 6명이면 22·30·38) |
 | 길이 | 게임 밤 한 번(현실 약 7분) | 현실 30분(시작 시 한밤으로 맞추고 낮밤 흐름 정지) |
 | 수면 | 불가 | 불가 |
 | 부활 | 평소 리스폰 지점 | 쓰러진 자리 반경 50블록 안, 블러드문 동안만([zombies.md](zombies.md#감염-레벨) 6-1) |
@@ -82,6 +82,7 @@ fullmoon.enabled=true        fullmoon.waves=1          fullmoon.sleepBlocked=tru
 bloodmoon.window=19:00-24:00 bloodmoon.minPlayers=5    bloodmoon.minNations=3
 bloodmoon.cooldownHours=48   bloodmoon.noticeMinutes=10 bloodmoon.durationMinutes=30
 bloodmoon.forceAfterHours=72 bloodmoon.forceMinPlayers=2
+bloodmoon.wave1=4+3P         bloodmoon.wave2=6+4P      bloodmoon.wave3=8+5P   (P = 잠수 아닌 참가자 1~15)
 bloodmoon.respawnRadius=50   bloodmoon.respawnMinRadius=16 bloodmoon.respawnLoopLimit=3  (5분 안)
 ```
 
