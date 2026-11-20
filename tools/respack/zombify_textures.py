@@ -3,7 +3,7 @@
 
 저장소에는 Mojang 텍스처를 넣지 않는다. 이 스크립트가 실행하는 사람의 마인크래프트 jar 에서
 원본을 읽어 변형하고, 결과는 tools/respack/out/ (저장소 제외)에 쓴다.
-여기서 나온 텍스처는 출발점이다. Blockbench 에서 손으로 다듬어 서버 리소스팩에 넣는다(docs/design/visuals.md).
+여기서 나온 텍스처는 출발점이다. Blockbench 에서 손으로 다듬어 서버 리소스팩에 넣는다(docs/tech/architecture.md '좀비화 외형').
 
     python zombify_textures.py --jar <minecraft-jar> [--preview preview.png]
 

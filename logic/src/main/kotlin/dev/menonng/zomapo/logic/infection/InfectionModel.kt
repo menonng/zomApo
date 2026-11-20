@@ -7,7 +7,7 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * 감염 레벨 계산식. docs/design/zombification.md 3절을 그대로 옮긴 것이다.
+ * 감염 레벨 계산식. docs/design/zombies.md '감염 레벨' 3절을 그대로 옮긴 것이다.
  * 시간은 모두 현실 시간이다.
  */
 data class InfectionConfig(
@@ -84,7 +84,7 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
 
 /**
  * 레벨 표시와 보간 도우미. 레벨별 규칙(스폰률·연소·알레르기·좀비화 계열)은
- * dev.menonng.zomapo.logic.spawn.LevelRules / Zombification 에 있다(docs/design/zombification.md 2절).
+ * dev.menonng.zomapo.logic.spawn.LevelRules / Zombification 에 있다(docs/design/zombies.md '감염 레벨' 2절).
  */
 object LevelEffects {
     internal fun interpolate(table: DoubleArray, level: Double): Double {

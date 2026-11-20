@@ -4,7 +4,7 @@ import kotlin.math.floor
 import kotlin.math.max
 
 /**
- * 청크 감염 레벨(0~5)에 따른 좀비 규칙. docs/design/zombification.md 2절.
+ * 청크 감염 레벨(0~5)에 따른 좀비 규칙. docs/design/zombies.md '감염 레벨' 2절.
  *
  * '스폰 레벨'은 그 개체가 태어난 청크의 정수 레벨이다. 좀비 떼는 목표 플레이어가 있는 청크 레벨을 쓴다.
  * 한 번 정해진 스폰 레벨은 개체에 저장되고, 개체가 다른 레벨의 청크로 걸어가도 바뀌지 않는다.
@@ -64,7 +64,7 @@ object LevelRules {
 
     /**
      * 레벨별 좀비 강화(제안안). 사용자 요구(레벨 2 무연소·낮 스폰, 레벨 4 체력 1.5배) 위에 더하는 것.
-     * docs/design/zombification.md 2-2.
+     * docs/design/zombies.md '감염 레벨' 2-2.
      */
     fun buffs(spawnLevel: Int): ZombieBuffs = when (spawnLevel.coerceIn(0, MAX_LEVEL)) {
         0 -> ZombieBuffs()

@@ -46,9 +46,9 @@
 
 | 기법 | 적용 |
 |---|---|
-| 열거형 + 생성자 참조 상태 기계, 생명주기 훅 | zomApo `ZombieForm` 계층 ([architecture.md](../tech/architecture.md)) |
-| **진영별로만 보이는 가짜 엔티티** | 망자 위치 표시를 **본인·자국민에게만** 보이는 발광 마커로 ([death-and-revenant.md](../design/death-and-revenant.md)), 등불 인첸트 |
-| **팀 색으로 발광 테두리 색 바꾸기** | 알파 좀비를 전용 스코어보드 팀에 넣어 빨간 발광 테두리로 ([mobs.md](../design/mobs.md)) |
+| 열거형 + 생성자 참조 상태 기계, 생명주기 훅 | zomApo `ZombieForm` 계층 ([architecture.md](../tech/architecture.md#구조)) |
+| **진영별로만 보이는 가짜 엔티티** | 망자 위치 표시를 **본인·자국민에게만** 보이는 발광 마커로 ([player.md](../design/player.md#망자-좀비)), 등불 인첸트 |
+| **팀 색으로 발광 테두리 색 바꾸기** | 알파 좀비를 전용 스코어보드 팀에 넣어 빨간 발광 테두리로 ([zombies.md](../design/zombies.md#몹-좀비화)) |
 | 슈퍼 좀비의 추적 | 알파 좀비가 무작위 접속자 한 명을 '추적 대상'으로 정하고 알림 ("알파가 당신을 쫓고 있습니다") |
 | 하이퍼 백신 연출 | **치료제 완성 연출**: 수도에서 로켓 발사 → 감염 지역이 차례로 정화되는 장면 ([decisions.md](../server/decisions.md) 4-4) |
 | 설정 수정 시각 감지 자동 리로드 | 두 모드 모두 `/reload` 명령과 함께 적용 |
@@ -161,11 +161,11 @@ frame(6줄, 제목) {
 
 | 문서 | 반영 내용 |
 |---|---|
-| [tech/architecture.md](../tech/architecture.md) | `logic` 모듈 분리, 스케줄러 시간 모드, 자원 소유권, 템플릿 문구, Kotlin 라이브러리 미포함, 버전 카탈로그·CI |
-| [design/death-and-revenant.md](../design/death-and-revenant.md) | 본인·자국민에게만 보이는 망자 마커 |
-| [design/mobs.md](../design/mobs.md) | 알파 좀비 팀 색 발광·추적, 특수 공격의 바닐라 피해 유형 |
+| [tech/architecture.md](../tech/architecture.md#구조) | `logic` 모듈 분리, 스케줄러 시간 모드, 자원 소유권, 템플릿 문구, Kotlin 라이브러리 미포함, 버전 카탈로그·CI |
+| [design/death-and-revenant.md](../design/player.md#망자-좀비) | 본인·자국민에게만 보이는 망자 마커 |
+| [design/mobs.md](../design/zombies.md#몹-좀비화) | 알파 좀비 팀 색 발광·추적, 특수 공격의 바닐라 피해 유형 |
 | [server/decisions.md](../server/decisions.md) | 치료제 완성 연출 |
-| [server/modlist.md](../server/modlist.md) | 운영 스크립트 |
-| [server/roadmap.md](../server/roadmap.md) | 시즌 전체 지도 포스터 |
+| [server/modlist.md](../server/README.md#모드-목록) | 운영 스크립트 |
+| [server/roadmap.md](../server/README.md#일정) | 시즌 전체 지도 포스터 |
 | simpleNationWar [tech/architecture.md](https://github.com/menonng/simpleNationWar/blob/HEAD/docs/tech/architecture.md) | `logic` 모듈, 타입 있는 다이얼로그, GUI DSL, `/info` 동적 인수 |
-| simpleNationWar [design/nation.md](https://github.com/menonng/simpleNationWar/blob/HEAD/docs/design/nation.md) | 국고 칸 해금(선택) |
+| simpleNationWar [design/nation.md](https://github.com/menonng/simpleNationWar/blob/HEAD/docs/design/nation.md#국가) | 국고 칸 해금(선택) |

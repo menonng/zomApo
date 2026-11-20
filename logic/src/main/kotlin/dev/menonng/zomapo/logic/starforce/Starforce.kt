@@ -2,7 +2,7 @@ package dev.menonng.zomapo.logic.starforce
 
 import kotlin.random.Random
 
-/** 스타포스 강화 규칙. docs/design/starforce.md. */
+/** 스타포스 강화 규칙. docs/design/player.md '스타포스'. */
 data class StarforceConfig(
     val maxStar: Int = 10,
     val weaponBonusPerStar: Double = 0.02,

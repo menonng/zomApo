@@ -33,37 +33,35 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 
 ## 문서
 
-### 서버 전체 (두 모드 공통)
-| 문서 | 내용 |
-|---|---|
-| [docs/server/README.md](docs/server/README.md) | 서버 마스터 플랜: 컨셉, 원칙, 결정 요약, 전체 구성도 |
-| [docs/server/decisions.md](docs/server/decisions.md) | 질문별 결정과 근거 (주민작, 초기 정착지, 맵 공개, 목표, 인벤세이브, 모드 채택 여부 …) |
-| [docs/server/modlist.md](docs/server/modlist.md) | 설치 모드·데이터팩 목록, 클라이언트 필요 여부, 26.3/26.4 지원 현황, 추가 추천 |
-| [docs/server/version-policy.md](docs/server/version-policy.md) | 26.3 → 26.4 버전 정책과 업그레이드 절차 |
-| [docs/server/simulation.md](docs/server/simulation.md) | 인원·활성 인구별 플레이 양상과 재미도 시뮬레이션 |
-| [docs/server/roadmap.md](docs/server/roadmap.md) | 개발 일정과 시즌 1 운영 일정 |
-| [docs/server/privacy.md](docs/server/privacy.md) | 개인정보와 데이터: 보관 정책, 외부 노출 지점, 가입 동의 항목 |
-| [docs/server/performance.md](docs/server/performance.md) | 서버 성능 실측: 필요한 RAM·CPU, 최적화 모드 효과, Folia 전환 검토 |
+통합 문서 4개가 줄기이고, 근거·검토가 길어 따로 둔 상세 문서가 있다.
 
-### zomApo 설계
+### 통합 문서 (먼저 읽을 것)
+
+| 문서 | 목차 |
+|---|---|
+| [서버 기획서](docs/server/README.md) | 개요(전제·원칙·결정 요약·구성) · 일정 · 버전 정책 · 모드 목록·서버 사양 |
+| [좀비](docs/design/zombies.md) | 감염 레벨(레벨별 규칙·스폰률·태양광 알레르기·좀비 떼·네더 레벨·둥지) · 몹 좀비화(레벨별 계열·출처 규칙·루트·변종) |
+| [플레이어 시스템](docs/design/player.md) | 좀비 통계 · 망자 좀비 · 스타포스 · 커스텀 인첸트 |
+| [기술 구조](docs/tech/architecture.md) | 구조(모듈·서버 사이드 제약과 해법) · 좀비화 외형(리소스팩 선택·리소스팩 없는 외형·리그) |
+
+### 상세 문서
+
 | 문서 | 내용 |
 |---|---|
-| [docs/design/zombification.md](docs/design/zombification.md) | 감염 레벨과 진척도 산정 방식 (원안 비교 포함) |
-| [docs/design/bloodmoon-and-cure.md](docs/design/bloodmoon-and-cure.md) | 블러드문(보름달 밤 + 동시 접속 트리거)과 치료제(서버 공동 연구) 검토. 시간 단위 규칙 |
-| [docs/design/mobs.md](docs/design/mobs.md) | 몹 좀비화: 레벨별 계열, 스폰 출처 규칙, 원종/좀비 루트, 좀비 변종 |
-| [docs/design/visuals.md](docs/design/visuals.md) | 좀비화 외형: 서버 리소스팩, 장비 레이어·머리 모델·블록벤치 리그, 텍스처 파이프라인 |
-| [docs/design/stats.md](docs/design/stats.md) | 좀비 처치 수·좀비 스코어, 점수표, 농장 악용 방지 |
-| [docs/design/death-and-revenant.md](docs/design/death-and-revenant.md) | 사망 처리: 망자 좀비 |
-| [docs/design/starforce.md](docs/design/starforce.md) | 스타포스 강화 |
-| [docs/design/enchantments.md](docs/design/enchantments.md) | 커스텀 인첸트 |
-| [docs/tech/architecture.md](docs/tech/architecture.md) | 기술 구조, 서버 사이드 제약과 해법, monun 저장소 패턴 대응표 |
-| [docs/reference/monun.md](docs/reference/monun.md) | monun 공개 저장소 16개 전체 분석과 가져올 기법 |
+| [decisions.md](docs/server/decisions.md) | 질문별 결정과 근거 전체 (주민작, 정착지, 맵 공개, 목표, 인벤세이브, 모드 채택, 월드 크기, 편성, 플랫폼, 인원 재검토, 겉날개, 보상) |
+| [simulation.md](docs/server/simulation.md) | 인원·활성 인구별 플레이 양상 시뮬레이션 |
+| [performance.md](docs/server/performance.md) | 서버 성능 실측: RAM·CPU, 최적화 모드, Fabric 대 Paper·Folia, 9600X 기준 설정 |
+| [privacy.md](docs/server/privacy.md) | 개인정보와 데이터 보관·노출·동의 |
+| [bloodmoon-and-cure.md](docs/design/bloodmoon-and-cure.md) | 블러드문·치료제 검토와 시간 단위 규칙 |
+| [monun.md](docs/reference/monun.md) | monun 공개 저장소 16개 분석 |
 
 ### 도구
 | 경로 | 내용 |
 |---|---|
 | [tools/sim/zomapo_sim.py](tools/sim/zomapo_sim.py) | 플레이 양상 시뮬레이터 (표준 라이브러리만 사용) |
 | [tools/sim/results.md](tools/sim/results.md) | 시뮬레이터 출력 원본 |
+| [tools/sim/team_sim.py](tools/sim/team_sim.py) | 국가 편성 방식 비교 ([team-results.md](tools/sim/team-results.md)) |
+| [tools/sim/starforce_sim.py](tools/sim/starforce_sim.py) | 스타포스 비용·운 분포 |
 | [tools/sim/load_sim.py](tools/sim/load_sim.py) | 서버 부하 시뮬레이터: 동시 접속·흩어짐 → 힙·틱 시간 ([load-results.md](tools/sim/load-results.md)) |
 | [tools/respack/zombify_textures.py](tools/respack/zombify_textures.py) | 바닐라 텍스처 → 좀비화 시안 텍스처(빌드 때 실행, Mojang 텍스처는 저장소에 넣지 않음) |
 | [tools/perf/bench.py](tools/perf/bench.py) | 서버 부하 실측: Carpet 봇으로 틱·힙·GC 측정. 자기 PC 에서도 실행 가능 ([results.md](tools/perf/results.md)) |

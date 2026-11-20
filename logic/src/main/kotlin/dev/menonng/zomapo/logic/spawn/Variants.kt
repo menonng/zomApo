@@ -2,7 +2,7 @@ package dev.menonng.zomapo.logic.spawn
 
 import kotlin.random.Random
 
-/** 좀비 변종. docs/design/mobs.md 5절. */
+/** 좀비 변종. docs/design/zombies.md '몹 좀비화' 7절. */
 enum class Variant(val unlockLevel: Int, val weightAtMax: Int, val baseScore: Double) {
     NORMAL(0, 40, 1.0),
     RUNNER(1, 15, 2.0),

@@ -2,7 +2,7 @@ package dev.menonng.zomapo.logic.score
 
 import java.util.UUID
 
-/** 좀비가 어디서 나왔는가. docs/design/stats.md 2절. */
+/** 좀비가 어디서 나왔는가. docs/design/player.md '좀비 통계' 2절. */
 enum class SpawnSource(val multiplier: Double) {
     NATURAL(1.0),
     SPAWNER(0.2),

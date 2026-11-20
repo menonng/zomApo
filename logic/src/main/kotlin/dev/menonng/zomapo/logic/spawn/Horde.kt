@@ -3,7 +3,7 @@ package dev.menonng.zomapo.logic.spawn
 import kotlin.random.Random
 
 /**
- * 좀비 떼 이벤트. docs/design/zombification.md 4절.
+ * 좀비 떼 이벤트. docs/design/zombies.md '감염 레벨' 4절.
  *
  * 서버 전체에서 6000틱(현실 5분)마다 한 번 시도한다. 레벨 2 이상 청크(오버월드)에 있는 플레이어 중
  * 한 명을 무작위로 고르고, 그 청크 레벨 n 으로 성공 확률 10 + 2n % 를 굴린다.
