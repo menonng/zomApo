@@ -59,6 +59,7 @@
 | 규모 | 접속자마다 주변에 1파(솔로가 감당할 크기, 레벨 보정) | 3파 + Lv4 이상이면 알파. 무작위로 고른 수도 하나 또는 생존자 캠프 습격. 회당 참가자가 평균 6명 안팎이므로 웨이브 몹 수는 참가자 수에 비례시킨다(수치 미정) |
 | 길이 | 게임 밤 한 번(현실 약 7분) | 현실 30분(시작 시 한밤으로 맞추고 낮밤 흐름 정지) |
 | 수면 | 불가 | 불가 |
+| 부활 | 평소 리스폰 지점 | 쓰러진 자리 반경 50블록 안, 블러드문 동안만([zombies.md](zombies.md#감염-레벨) 6-1) |
 | 보상 | 바이러스 결정 소량 | 참가자 전원 결정·좀비 스코어 보너스, 정화(72시간), 공동 연구 진척 |
 | 보장 장치 | — | 72시간 동안 한 번도 발동하지 않으면 다음 21:00 에 2명 이상 접속 시 강제 개최. 시즌 마지막은 최후의 호드(2-3절) |
 
@@ -81,6 +82,7 @@ fullmoon.enabled=true        fullmoon.waves=1          fullmoon.sleepBlocked=tru
 bloodmoon.window=19:00-24:00 bloodmoon.minPlayers=5    bloodmoon.minNations=3
 bloodmoon.cooldownHours=48   bloodmoon.noticeMinutes=10 bloodmoon.durationMinutes=30
 bloodmoon.forceAfterHours=72 bloodmoon.forceMinPlayers=2
+bloodmoon.respawnRadius=50   bloodmoon.respawnMinRadius=16 bloodmoon.respawnLoopLimit=3  (5분 안)
 ```
 
 ### 1-6. 인원 상향 재검토 (2026-11-20): 트리거 조건을 올린 이유
