@@ -1,6 +1,9 @@
 package dev.menonng.zomapo.logic
 
-import dev.menonng.zomapo.logic.spawn.DimensionLevels
+import dev.menonng.zomapo.logic.death.DeathDrop
+import dev.menonng.zomapo.logic.death.DeathRules
+import dev.menonng.zomapo.logic.death.Killer
+import dev.menonng.zomapo.logic.spawn.NetherLevels
 import dev.menonng.zomapo.logic.spawn.Family
 import dev.menonng.zomapo.logic.spawn.Horde
 import dev.menonng.zomapo.logic.spawn.LevelRules
@@ -91,6 +94,9 @@ class SpawnRulesTest {
         assertTrue(Zombification.shouldZombify("shulker", 3, SpawnOrigin.STRUCTURE_PLACED))
         assertTrue(Zombification.shouldZombify("blaze", 3, SpawnOrigin.STRUCTURE_LIST))
         assertTrue(Zombification.shouldZombify("wither_skeleton", 3, SpawnOrigin.STRUCTURE_LIST))
+        assertTrue(Zombification.shouldZombify("piglin_brute", 3, SpawnOrigin.STRUCTURE_PLACED))
+        assertFalse(Zombification.shouldZombify("piglin_brute", 2, SpawnOrigin.STRUCTURE_PLACED))
+        assertFalse(Zombification.shouldZombify("sulfur_cube", 5, SpawnOrigin.NATURAL))
         assertTrue(Zombification.shouldZombify("slime", 0, SpawnOrigin.SPLIT, parentZombified = true))
         assertFalse(Zombification.shouldZombify("slime", 5, SpawnOrigin.SPLIT, parentZombified = false))
     }
@@ -105,12 +111,41 @@ class SpawnRulesTest {
     }
 
     @Test
-    @DisplayName("네더는 2 + G (최대 4.5), 엔드는 3 고정")
+    @DisplayName("네더: 탐험 절반이면 3, 근처 플레이어 좀비 스코어로 그 주변만 더 오름. 엔드 3")
     fun case07() {
-        assertEquals(2.0, DimensionLevels.nether(0.0), eps)
-        assertEquals(3.2, DimensionLevels.nether(1.2), eps)
-        assertEquals(4.5, DimensionLevels.nether(3.0), eps)
-        assertEquals(3.0, DimensionLevels.end(), eps)
+        assertEquals(0.0, NetherLevels.base(0), eps)
+        assertEquals(3.0, NetherLevels.base(NetherLevels.TOTAL_CHUNKS / 2, NetherLevels.TOTAL_CHUNKS / 2 * 2), eps)
+        assertEquals(5.0, NetherLevels.base(NetherLevels.TOTAL_CHUNKS), eps)
+        assertEquals(kotlin.math.ln(2.0), NetherLevels.scoreBonus(1500.0), eps)
+        assertEquals(1.5, NetherLevels.scoreBonus(1e6), eps)
+        assertEquals(1.0, NetherLevels.falloff(10.0), eps)
+        assertEquals(0.5, NetherLevels.falloff(80.0), eps)
+        assertEquals(0.0, NetherLevels.falloff(200.0), eps)
+        // 가장 큰 보너스 하나만
+        val lv = NetherLevels.level(2.0, listOf(1500.0 to 10.0, 6000.0 to 200.0, 3000.0 to 80.0))
+        assertEquals(2.0 + maxOf(kotlin.math.ln(2.0), kotlin.math.ln(3.0) * 0.5), lv, eps)
+        assertEquals(3.0, NetherLevels.end(), eps)
+    }
+
+    @Test
+    @DisplayName("조명 계수: 0~3 그대로, 4~11 1/4, 12 이상 없음")
+    fun case09() {
+        assertEquals(1.0, LevelRules.lightFactor(0), eps)
+        assertEquals(1.0, LevelRules.lightFactor(3), eps)
+        assertEquals(0.25, LevelRules.lightFactor(4), eps)
+        assertEquals(0.25, LevelRules.lightFactor(11), eps)
+        assertEquals(0.0, LevelRules.lightFactor(12), eps)
+        assertEquals(1.7 * 0.25, LevelRules.indoorZombieRate(2, 8), eps)
+    }
+
+    @Test
+    @DisplayName("망자는 좀비에게 죽었을 때만(10초 안 좀비 피격 포함), PvP 는 바닐라 드랍, 나머지는 보존 드랍")
+    fun case10() {
+        assertEquals(DeathDrop.REVENANT, DeathRules.decide(Killer.ZOMBIE))
+        assertEquals(DeathDrop.REVENANT, DeathRules.decide(Killer.ENVIRONMENT, ticksSinceZombieHit = 100))
+        assertEquals(DeathDrop.PRESERVED_DROP, DeathRules.decide(Killer.ENVIRONMENT, ticksSinceZombieHit = 400))
+        assertEquals(DeathDrop.PRESERVED_DROP, DeathRules.decide(Killer.OTHER_MOB))
+        assertEquals(DeathDrop.VANILLA_DROP, DeathRules.decide(Killer.PLAYER, ticksSinceZombieHit = 10))
     }
 
     @Test
@@ -124,7 +159,7 @@ class SpawnRulesTest {
         assertNull(Horde.attempt(Random(1), none))
         // 많이 굴려 성공률과 크기 범위 확인
         val rng = Random(42)
-        val pool = listOf(Horde.Candidate("lv3", 3))
+        val pool = listOf(Horde.Candidate("lv3", 3), Horde.Candidate("x", 1), Horde.Candidate("y", 0))
         var ok = 0
         repeat(20000) {
             val o = Horde.attempt(rng, pool)
@@ -136,5 +171,8 @@ class SpawnRulesTest {
         }
         assertEquals(0.16, ok / 20000.0, 0.01)
         assertFalse(Horde.eligible(Horde.Candidate("d", 3, ticksSinceLastHorde = 1000)))
+        // 오버월드 접속자 2명 이하면 시도하지 않는다
+        val two = listOf(Horde.Candidate("a", 5), Horde.Candidate("b", 5))
+        repeat(200) { assertNull(Horde.attempt(Random(it), two)) }
     }
 }

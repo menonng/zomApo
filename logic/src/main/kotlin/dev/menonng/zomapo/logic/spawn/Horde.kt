@@ -13,6 +13,9 @@ object Horde {
     const val INTERVAL_TICKS = 6000L
     const val MIN_LEVEL = 2
 
+    /** 오버월드 접속자가 이 수보다 적으면 시도하지 않는다(혼자·둘이 놀 때 쉬는 시간). */
+    const val MIN_ONLINE = 3
+
     fun chance(level: Int): Double = 0.10 + 0.02 * level.coerceIn(0, LevelRules.MAX_LEVEL)
 
     fun sizeRange(level: Int): IntRange {
@@ -38,8 +41,9 @@ object Horde {
     fun eligible(c: Candidate, cooldown: Long = PERSONAL_COOLDOWN_TICKS): Boolean =
         c.level >= MIN_LEVEL && c.overworld && !c.protected && c.ticksSinceLastHorde >= cooldown
 
-    /** 한 번의 시도. 대상이 없거나 확률에 실패하면 null. */
-    fun attempt(random: Random, candidates: List<Candidate>, cooldown: Long = PERSONAL_COOLDOWN_TICKS): Outcome? {
+    /** 한 번의 시도. 접속자가 [MIN_ONLINE] 미만이거나 대상이 없거나 확률에 실패하면 null. [candidates] 는 오버월드 접속자 전원. */
+    fun attempt(random: Random, candidates: List<Candidate>, cooldown: Long = PERSONAL_COOLDOWN_TICKS, minOnline: Int = MIN_ONLINE): Outcome? {
+        if (candidates.count { it.overworld } < minOnline) return null
         val pool = candidates.filter { eligible(it, cooldown) }
         if (pool.isEmpty()) return null
         val target = pool[random.nextInt(pool.size)]

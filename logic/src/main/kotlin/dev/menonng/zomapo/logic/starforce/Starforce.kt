@@ -11,13 +11,28 @@ data class StarforceConfig(
     val playerMultiplier: Double = 0.3,
     val milestones: Set<Int> = setOf(5, 10, 15),
     val starCatchMultiplier: Double = 1.05,
+    /** 같은 단계에서 실패할 때마다 다음 성공 확률 +5%p (성공하면 초기화). 운 나쁜 연속 실패를 줄인다. */
+    val failBonusStep: Double = 0.05,
+    /** 실패하면 바이러스 결정 절반을 돌려준다(내림). */
+    val refundOnFail: Double = 0.5,
+    /** 같은 종류의 새 장비로 옮길 때 남는 비율(내림). */
+    val transferRatio: Double = 0.8,
 )
 
 enum class Outcome { SUCCESS, KEEP, DOWN }
 
 data class Cost(val crystals: Int, val xpLevels: Int, val emeralds: Int)
 
-data class AttemptResult(val outcome: Outcome, val newStar: Int, val newDownStreak: Int, val chanceTime: Boolean)
+data class AttemptResult(
+    val outcome: Outcome,
+    val newStar: Int,
+    val newDownStreak: Int,
+    val chanceTime: Boolean,
+    /** 다음 시도에 더할 실패 누적 보너스 */
+    val newFailBonus: Double = 0.0,
+    /** 돌려줄 바이러스 결정 */
+    val refundCrystals: Int = 0,
+)
 
 sealed interface AttemptCheck {
     data object Ok : AttemptCheck
@@ -46,7 +61,7 @@ class Starforce(val config: StarforceConfig = StarforceConfig()) {
 
     fun cost(star: Int): Cost = when {
         star < 5 -> Cost(1, 2, 0)
-        star < 10 -> Cost(3, 5, 0)
+        star < 10 -> Cost(3, 3, 0)
         else -> Cost(6, 10, 8)
     }
 
@@ -56,20 +71,29 @@ class Starforce(val config: StarforceConfig = StarforceConfig()) {
         return if (crystals >= c.crystals && xpLevels >= c.xpLevels && emeralds >= c.emeralds) AttemptCheck.Ok else AttemptCheck.NotEnough(c)
     }
 
-    /** 강화 1회. 연속 2번 하락한 뒤에는 찬스 타임(100% 성공). */
-    fun attempt(star: Int, downStreak: Int, random: Random, starCatch: Boolean = false): AttemptResult {
+    /**
+     * 강화 1회. 연속 2번 하락한 뒤에는 찬스 타임(100% 성공).
+     * [failBonus] 는 같은 단계에서 쌓인 실패 보너스(실패마다 +5%p, 성공·하락하면 초기화).
+     */
+    fun attempt(star: Int, downStreak: Int, random: Random, starCatch: Boolean = false, failBonus: Double = 0.0): AttemptResult {
         require(star < config.maxStar) { "이미 최대 성" }
         if (downStreak >= 2) return AttemptResult(Outcome.SUCCESS, star + 1, 0, chanceTime = true)
-        val (success, keep, _) = odds(star)
+        val (success0, keep0, _) = odds(star)
+        val success = (success0 + failBonus).coerceAtMost(1.0)
+        val keep = if (success0 >= 1.0) 0.0 else keep0 * (1.0 - success) / (1.0 - success0)
         val s = if (starCatch) (success * config.starCatchMultiplier).coerceAtMost(1.0) else success
-        val k = keep * (1.0 - s) / (1.0 - success).coerceAtLeast(1e-9)
+        val k = if (success >= 1.0) 0.0 else keep * (1.0 - s) / (1.0 - success)
+        val refund = (cost(star).crystals * config.refundOnFail).toInt()
         val roll = random.nextDouble()
         return when {
             roll < s -> AttemptResult(Outcome.SUCCESS, star + 1, 0, false)
-            roll < s + k -> AttemptResult(Outcome.KEEP, star, downStreak, false)
-            else -> AttemptResult(Outcome.DOWN, star - 1, downStreak + 1, false)
+            roll < s + k -> AttemptResult(Outcome.KEEP, star, downStreak, false, failBonus + config.failBonusStep, refund)
+            else -> AttemptResult(Outcome.DOWN, star - 1, downStreak + 1, false, 0.0, refund)
         }
     }
+
+    /** 같은 종류(검 → 검, 투구 → 투구)의 새 장비로 성을 옮긴다. 80% 내림. 대장장이 작업대 강화 GUI 에서. */
+    fun transferredStar(star: Int): Int = kotlin.math.floor(star * config.transferRatio).toInt()
 
     /** 무기 보너스 배율(좀비 대상). 15성 기준 +45%. */
     fun weaponBonus(star: Int): Double =

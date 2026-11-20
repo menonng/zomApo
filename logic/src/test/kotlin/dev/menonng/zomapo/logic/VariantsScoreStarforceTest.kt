@@ -107,7 +107,29 @@ class StarforceTest {
     fun case09() {
         assertIs<AttemptCheck.MaxStar>(sf.check(10, 99, 99, 99))
         assertIs<AttemptCheck.NotEnough>(sf.check(5, 2, 99, 0))
-        assertIs<AttemptCheck.Ok>(sf.check(5, 3, 5, 0))
+        assertIs<AttemptCheck.Ok>(sf.check(5, 3, 3, 0))
+        assertIs<AttemptCheck.NotEnough>(sf.check(5, 3, 2, 0))
+    }
+
+    @Test
+    @DisplayName("실패 보너스: 실패마다 +5%p, 실패하면 결정 절반 환급, 성 옮기기는 80%")
+    fun case12() {
+        val r = Random(11)
+        var bonus = 0.0
+        var fails = 0
+        // 9 → 10 (40%) 에서 실패가 이어지면 보너스가 쌓여 결국 성공한다
+        while (true) {
+            val res = sf.attempt(star = 9, downStreak = 0, random = r, failBonus = bonus)
+            if (res.outcome == Outcome.SUCCESS) break
+            assertEquals(Outcome.KEEP, res.outcome)
+            assertEquals(1, res.refundCrystals)
+            bonus = res.newFailBonus
+            fails++
+            assertTrue(fails <= 12)
+        }
+        assertEquals(1.0, Starforce().attempt(9, 0, Random(1), failBonus = 0.6).let { if (it.outcome == Outcome.SUCCESS) 1.0 else 0.0 }, 1e-9)
+        assertEquals(8, sf.transferredStar(10))
+        assertEquals(5, sf.transferredStar(7))
     }
 
     @Test

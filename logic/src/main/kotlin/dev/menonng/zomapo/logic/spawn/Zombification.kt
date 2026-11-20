@@ -21,6 +21,7 @@ enum class Family(val threshold: Int, val label: String) {
     SHULKER(3, "셜커"),
     NETHER(3, "네더 몹"),           // 가스트·블레이즈·마그마 큐브·위더 스켈레톤
     PIGLIN(3, "피글린 → 좀비화 피글린"),
+    PIGLIN_BRUTE(3, "피글린 브루트 → 부패 브루트(고유)"),
     HOGLIN(3, "호글린 → 조글린"),
     ZOMBIE(0, "이미 좀비"),          // 변환 없음, 레벨 강화만
     EXCLUDED(Int.MAX_VALUE, "제외"),
@@ -57,11 +58,12 @@ object Zombification {
         put("shulker", Family.SHULKER)
         listOf("ghast", "blaze", "magma_cube", "wither_skeleton").forEach { put(it, Family.NETHER) }
         put("piglin", Family.PIGLIN)
+        put("piglin_brute", Family.PIGLIN_BRUTE)
         put("hoglin", Family.HOGLIN)
         listOf("zombie", "husk", "drowned", "zombie_villager", "zombified_piglin", "zoglin", "zombie_horse",
             "camel_husk", "zombie_nautilus", "frostbite").forEach { put(it, Family.ZOMBIE) }
-        // 제외: 보스·미니보스·워든, 습격·소환 전용, 비공격 몹
-        listOf("ender_dragon", "wither", "elder_guardian", "warden", "ravager", "vex", "piglin_brute",
+        // 제외: 보스·미니보스·워든, 습격·소환 전용, 비공격 몹(유황 큐브는 비공격 몹으로 확인)
+        listOf("ender_dragon", "wither", "elder_guardian", "warden", "ravager", "vex",
             "sulfur_cube", "strider").forEach { put(it, Family.EXCLUDED) }
     }
 
@@ -75,6 +77,7 @@ object Zombification {
         Family.SLIME to setOf(SpawnOrigin.STRUCTURE_LIST),
         Family.BREEZE to setOf(SpawnOrigin.TRIAL_SPAWNER),
         Family.SHULKER to setOf(SpawnOrigin.STRUCTURE_PLACED),
+        Family.PIGLIN_BRUTE to setOf(SpawnOrigin.STRUCTURE_PLACED),   // 보루에서만 생성
     )
     private val EXCEPTION_IDS: Map<String, Set<SpawnOrigin>> = mapOf(
         "blaze" to setOf(SpawnOrigin.STRUCTURE_LIST),

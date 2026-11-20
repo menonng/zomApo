@@ -22,8 +22,6 @@ data class InfectionConfig(
     val borderOwnWeight: Double = 0.7,
     val landmarkBonus: Double = 1.0,
     val nestMinimum: Double = 3.0,
-    val netherBonus: Double = 2.0,     // 네더 = min(4.5, 2.0 + G): 시즌 1주차에 레벨 3(네더 몹 좀비화)에 닿는다
-    val netherCap: Double = 4.5,
     val endFixed: Double = 3.0,       // 엔드 = 3 고정(셜커·엔더맨 좀비화). 떼·낮 스폰은 오버월드만
 )
 
@@ -75,7 +73,7 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
             Zone.LANDMARK -> clamp(surrounding + config.landmarkBonus)
             Zone.NEST -> clamp(max(config.nestMinimum, surrounding))
             Zone.CAMP -> 0.0
-            Zone.NETHER -> min(config.netherCap, clamp(ramp + config.netherBonus))
+            Zone.NETHER -> clamp(surrounding)   // 네더는 spawn.NetherLevels 가 계산한 값을 surrounding 으로 넘긴다
             Zone.END -> config.endFixed
         }
 

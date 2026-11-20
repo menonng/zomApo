@@ -68,8 +68,7 @@ class InfectionModelTest {
         assertEquals(3.0, model.areaLevel(Zone.NEST, ramp), eps)
         assertEquals(0.0, model.areaLevel(Zone.CAMP, ramp), eps)
         assertEquals(3.0, model.areaLevel(Zone.END, 5.0), eps)
-        assertEquals(4.5, model.areaLevel(Zone.NETHER, 4.8), eps)
-        assertEquals(2.5, model.areaLevel(Zone.NETHER, 0.5), eps)
+        assertEquals(2.4, model.areaLevel(Zone.NETHER, 4.8, surrounding = 2.4), eps)
     }
 
 
