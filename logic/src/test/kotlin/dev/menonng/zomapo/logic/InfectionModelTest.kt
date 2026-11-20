@@ -1,6 +1,5 @@
 package dev.menonng.zomapo.logic
 
-import dev.menonng.zomapo.logic.infection.EquipmentScore
 import dev.menonng.zomapo.logic.infection.InfectionModel
 import dev.menonng.zomapo.logic.infection.LevelEffects
 import dev.menonng.zomapo.logic.infection.NationActivity
@@ -68,35 +67,18 @@ class InfectionModelTest {
         assertEquals(2.8, model.areaLevel(Zone.LANDMARK, ramp), eps)
         assertEquals(3.0, model.areaLevel(Zone.NEST, ramp), eps)
         assertEquals(0.0, model.areaLevel(Zone.CAMP, ramp), eps)
-        assertEquals(0.0, model.areaLevel(Zone.END, 5.0), eps)
-        assertEquals(4.0, model.areaLevel(Zone.NETHER, 4.8), eps)
+        assertEquals(3.0, model.areaLevel(Zone.END, 5.0), eps)
+        assertEquals(4.5, model.areaLevel(Zone.NETHER, 4.8), eps)
+        assertEquals(2.5, model.areaLevel(Zone.NETHER, 0.5), eps)
     }
 
-    @Test
-    @DisplayName("스폰 레벨 - 하한은 항상, 상한은 솔로일 때만")
-    fun case08() {
-        assertEquals(3.0, model.spawnLevel(area = 1.0, equipmentScore = 4.0, solo = false), eps)
-        assertEquals(2.0, model.spawnLevel(area = 4.0, equipmentScore = 0.5, solo = true), eps)
-        assertEquals(4.0, model.spawnLevel(area = 4.0, equipmentScore = 0.5, solo = false), eps)
-        assertEquals(5.0, model.spawnLevel(area = 5.0, equipmentScore = 5.0, solo = true), eps)
-    }
+
 
     @Test
-    @DisplayName("장비 점수 예시표")
-    fun case09() {
-        assertEquals(0.64, EquipmentScore.compute(0.0, 0.0, 4.0, 0, 0), eps)
-        assertEquals(2.24, EquipmentScore.compute(15.0, 0.0, 6.0, 0, 0), eps)
-        assertEquals(5.0, EquipmentScore.compute(20.0, 12.0, 8.0, 30, 0), eps)
-        assertTrue(EquipmentScore.compute(20.0, 8.0, 7.0, 9, 0) in 3.6..3.9)
-    }
-
-    @Test
-    @DisplayName("레벨 효과는 선형 보간")
+    @DisplayName("보간과 표시 레벨")
     fun case10() {
-        assertEquals(0.0, LevelEffects.conversionChance(0.0), eps)
-        assertEquals(0.475, LevelEffects.conversionChance(2.5), eps)
-        assertEquals(1.0, LevelEffects.conversionChance(7.0), eps)
-        assertEquals(1.5, LevelEffects.monsterCapMultiplier(2.5), eps)
+        assertEquals(0.475, LevelEffects.interpolate(doubleArrayOf(0.0, 0.15, 0.35, 0.60, 0.85, 1.0), 2.5), eps)
         assertEquals(3, LevelEffects.displayLevel(3.99))
+        assertEquals(5, LevelEffects.displayLevel(7.0))
     }
 }

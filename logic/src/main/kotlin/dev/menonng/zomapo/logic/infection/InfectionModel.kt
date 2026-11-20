@@ -22,10 +22,9 @@ data class InfectionConfig(
     val borderOwnWeight: Double = 0.7,
     val landmarkBonus: Double = 1.0,
     val nestMinimum: Double = 3.0,
-    val netherBonus: Double = 0.5,
-    val netherCap: Double = 4.0,
-    val lowerOffset: Double = 1.0,
-    val soloUpperOffset: Double = 1.5,
+    val netherBonus: Double = 2.0,     // 네더 = min(4.5, 2.0 + G): 시즌 1주차에 레벨 3(네더 몹 좀비화)에 닿는다
+    val netherCap: Double = 4.5,
+    val endFixed: Double = 3.0,       // 엔드 = 3 고정(셜커·엔더맨 좀비화). 떼·낮 스폰은 오버월드만
 )
 
 /** 한 국가의 최근 72시간 활동. */
@@ -77,41 +76,19 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
             Zone.NEST -> clamp(max(config.nestMinimum, surrounding))
             Zone.CAMP -> 0.0
             Zone.NETHER -> min(config.netherCap, clamp(ramp + config.netherBonus))
-            Zone.END -> 0.0
+            Zone.END -> config.endFixed
         }
 
     /** 두 국가의 접경이 겹치면 큰 값을 쓴다. */
     fun overlappingBorder(levels: Collection<Double>): Double = levels.maxOrNull() ?: 0.0
 
-    /**
-     * 스폰 레벨: 영역 레벨을 근처 플레이어의 장비 점수 쪽으로 당긴다.
-     * 하한 P − 1 은 항상, 상한 P + 1.5 는 솔로일 때만 적용한다.
-     */
-    fun spawnLevel(area: Double, equipmentScore: Double, solo: Boolean): Double {
-        var level = max(area, min(config.maxLevel, equipmentScore - config.lowerOffset))
-        if (solo) level = min(level, equipmentScore + config.soloUpperOffset)
-        return clamp(level)
-    }
 }
 
-/** 장비 점수 P (0~5). docs/design/zombification.md 3-5. */
-object EquipmentScore {
-    fun compute(armor: Double, toughness: Double, weaponDamage: Double, enchantLevels: Int, stars: Int): Double {
-        val a = min(1.0, max(0.0, armor + toughness) / 32.0)
-        val w = min(1.0, max(0.0, weaponDamage - 1.0) / 7.0)
-        val e = min(1.0, enchantLevels / 30.0 + stars / 60.0)
-        return 5.0 * (0.5 * a + 0.3 * w + 0.2 * e)
-    }
-}
-
-/** 레벨별 효과. 정수 레벨 사이는 선형 보간한다. docs/design/zombification.md 2절. */
+/**
+ * 레벨 표시와 보간 도우미. 레벨별 규칙(스폰률·연소·알레르기·좀비화 계열)은
+ * dev.menonng.zomapo.logic.spawn.LevelRules / Zombification 에 있다(docs/design/zombification.md 2절).
+ */
 object LevelEffects {
-    private val conversion = doubleArrayOf(0.0, 0.15, 0.35, 0.60, 0.85, 1.0)
-    private val monsterCap = doubleArrayOf(1.0, 1.2, 1.4, 1.6, 1.8, 2.0)
-
-    fun conversionChance(level: Double): Double = interpolate(conversion, level)
-    fun monsterCapMultiplier(level: Double): Double = interpolate(monsterCap, level)
-
     internal fun interpolate(table: DoubleArray, level: Double): Double {
         val x = level.coerceIn(0.0, (table.size - 1).toDouble())
         val i = x.toInt().coerceAtMost(table.size - 2)

@@ -1,0 +1,140 @@
+package dev.menonng.zomapo.logic
+
+import dev.menonng.zomapo.logic.spawn.DimensionLevels
+import dev.menonng.zomapo.logic.spawn.Family
+import dev.menonng.zomapo.logic.spawn.Horde
+import dev.menonng.zomapo.logic.spawn.LevelRules
+import dev.menonng.zomapo.logic.spawn.SpawnOrigin
+import dev.menonng.zomapo.logic.spawn.Zombification
+import org.junit.jupiter.api.DisplayName
+import kotlin.random.Random
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class SpawnRulesTest {
+    private val eps = 1e-9
+
+    @Test
+    @DisplayName("밤 스폰률 1.5 + 0.1L, 낮 지상은 레벨 2부터 밤의 0.1배")
+    fun case01() {
+        assertEquals(1.5, LevelRules.nightZombieRate(0), eps)
+        assertEquals(1.7, LevelRules.nightZombieRate(2), eps)
+        assertEquals(2.0, LevelRules.nightZombieRate(5), eps)
+        assertEquals(0.0, LevelRules.dayZombieRate(1), eps)
+        assertEquals(0.17, LevelRules.dayZombieRate(2), eps)
+        assertEquals(0.2, LevelRules.dayZombieRate(5), eps)
+    }
+
+    @Test
+    @DisplayName("레벨 2 이상 무연소, 레벨 4 이상 체력 1.5배")
+    fun case02() {
+        assertTrue(LevelRules.burnsInDaylight(0))
+        assertTrue(LevelRules.burnsInDaylight(1))
+        assertFalse(LevelRules.burnsInDaylight(2))
+        assertEquals(1.0, LevelRules.baseHealthMultiplier(3), eps)
+        assertEquals(1.5, LevelRules.baseHealthMultiplier(4), eps)
+        assertEquals(1.5, LevelRules.baseHealthMultiplier(5), eps)
+    }
+
+    @Test
+    @DisplayName("태양광 알레르기: 레벨 0 → 4단계(−25%, ÷1.6), 레벨 3 → 1단계(−10%, ÷1.3), 레벨 4 이상 없음")
+    fun case03() {
+        val a0 = LevelRules.sunAllergy(0)!!
+        assertEquals(4, a0.stage); assertEquals(0.25, a0.healthCut, eps); assertEquals(1.6, a0.followRangeDivisor, eps)
+        val a2 = LevelRules.sunAllergy(2)!!
+        assertEquals(2, a2.stage); assertEquals(0.15, a2.speedCut, eps); assertEquals(1.4, a2.followRangeDivisor, eps)
+        val a3 = LevelRules.sunAllergy(3)!!
+        assertEquals(1, a3.stage); assertEquals(0.10, a3.healthCut, eps); assertEquals(1.3, a3.followRangeDivisor, eps)
+        assertNull(LevelRules.sunAllergy(4))
+        assertNull(LevelRules.sunAllergy(5))
+        assertEquals(1.0 / 1.6 - 1.0, a0.followRangeModifier, eps)
+        assertEquals(15.0, LevelRules.rescaleHealth(20.0, 20.0, 15.0), eps)
+        assertEquals(20.0, LevelRules.rescaleHealth(15.0, 15.0, 20.0), eps)
+        assertEquals(10.0, LevelRules.rescaleHealth(7.5, 15.0, 20.0), eps)
+    }
+
+    @Test
+    @DisplayName("계열별 좀비화 레벨")
+    fun case04() {
+        val n = SpawnOrigin.NATURAL
+        assertFalse(Zombification.shouldZombify("skeleton", 0, n))
+        assertTrue(Zombification.shouldZombify("minecraft:skeleton", 1, n))
+        assertTrue(Zombification.shouldZombify("parched", 1, n))
+        assertTrue(Zombification.shouldZombify("spider", 1, n))
+        assertFalse(Zombification.shouldZombify("creeper", 1, n))
+        assertTrue(Zombification.shouldZombify("creeper", 2, n))
+        assertTrue(Zombification.shouldZombify("enderman", 2, n))
+        assertFalse(Zombification.shouldZombify("pillager", 2, SpawnOrigin.PATROL))
+        assertTrue(Zombification.shouldZombify("pillager", 3, SpawnOrigin.PATROL))
+        assertFalse(Zombification.shouldZombify("zombie", 5, n))           // 이미 좀비
+        assertFalse(Zombification.shouldZombify("warden", 5, n))           // 제외
+        assertFalse(Zombification.shouldZombify("elder_guardian", 5, SpawnOrigin.STRUCTURE_PLACED))
+        assertEquals(Family.EXCLUDED, Zombification.family("some_new_mob"))
+        assertFalse(Zombification.isKnown("some_new_mob"))
+    }
+
+    @Test
+    @DisplayName("구조물·스포너 출신은 그대로, 가디언·슬라임·브리즈·셜커·요새 몹은 예외")
+    fun case05() {
+        assertFalse(Zombification.shouldZombify("zombie", 5, SpawnOrigin.SPAWNER))
+        assertFalse(Zombification.shouldZombify("skeleton", 5, SpawnOrigin.SPAWNER))
+        assertFalse(Zombification.shouldZombify("vindicator", 5, SpawnOrigin.STRUCTURE_PLACED))
+        assertFalse(Zombification.shouldZombify("pillager", 5, SpawnOrigin.STRUCTURE_LIST))   // 전초기지
+        assertFalse(Zombification.shouldZombify("pillager", 5, SpawnOrigin.RAID))
+        assertFalse(Zombification.shouldZombify("skeleton", 5, SpawnOrigin.TRIAL_SPAWNER))
+        assertTrue(Zombification.shouldZombify("guardian", 3, SpawnOrigin.STRUCTURE_LIST))
+        assertFalse(Zombification.shouldZombify("guardian", 2, SpawnOrigin.STRUCTURE_LIST))
+        assertTrue(Zombification.shouldZombify("breeze", 3, SpawnOrigin.TRIAL_SPAWNER))
+        assertTrue(Zombification.shouldZombify("shulker", 3, SpawnOrigin.STRUCTURE_PLACED))
+        assertTrue(Zombification.shouldZombify("blaze", 3, SpawnOrigin.STRUCTURE_LIST))
+        assertTrue(Zombification.shouldZombify("wither_skeleton", 3, SpawnOrigin.STRUCTURE_LIST))
+        assertTrue(Zombification.shouldZombify("slime", 0, SpawnOrigin.SPLIT, parentZombified = true))
+        assertFalse(Zombification.shouldZombify("slime", 5, SpawnOrigin.SPLIT, parentZombified = false))
+    }
+
+    @Test
+    @DisplayName("루트테이블: 좀비화하면 원종 + 좀비를 각각")
+    fun case06() {
+        assertEquals(listOf("minecraft:entities/creeper", "minecraft:entities/zombie"), Zombification.lootTables("creeper", true))
+        assertEquals(listOf("minecraft:entities/creeper"), Zombification.lootTables("minecraft:creeper", false))
+        assertEquals("zoglin", Zombification.VANILLA_COUNTERPART["hoglin"])
+        assertEquals(0.5, Zombification.counterpartChance("piglin"), eps)
+    }
+
+    @Test
+    @DisplayName("네더는 2 + G (최대 4.5), 엔드는 3 고정")
+    fun case07() {
+        assertEquals(2.0, DimensionLevels.nether(0.0), eps)
+        assertEquals(3.2, DimensionLevels.nether(1.2), eps)
+        assertEquals(4.5, DimensionLevels.nether(3.0), eps)
+        assertEquals(3.0, DimensionLevels.end(), eps)
+    }
+
+    @Test
+    @DisplayName("좀비 떼: 확률 10+2n%, 크기 5+n~10+n, 레벨 2 이상 오버월드만")
+    fun case08() {
+        assertEquals(0.14, Horde.chance(2), eps)
+        assertEquals(0.20, Horde.chance(5), eps)
+        assertEquals(7..12, Horde.sizeRange(2))
+        assertEquals(10..15, Horde.sizeRange(5))
+        val none = listOf(Horde.Candidate("a", 1), Horde.Candidate("b", 4, overworld = false), Horde.Candidate("c", 3, protected = true))
+        assertNull(Horde.attempt(Random(1), none))
+        // 많이 굴려 성공률과 크기 범위 확인
+        val rng = Random(42)
+        val pool = listOf(Horde.Candidate("lv3", 3))
+        var ok = 0
+        repeat(20000) {
+            val o = Horde.attempt(rng, pool)
+            if (o != null) {
+                ok++
+                assertEquals("lv3", o.target)
+                assertTrue(o.size in 8..13)
+            }
+        }
+        assertEquals(0.16, ok / 20000.0, 0.01)
+        assertFalse(Horde.eligible(Horde.Candidate("d", 3, ticksSinceLastHorde = 1000)))
+    }
+}

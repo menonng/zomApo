@@ -23,13 +23,13 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 
 ## 한눈에 보기
 
-- 몬스터로 분류되는 몹 중 비공격적 몹(적대도 중립도 아닌 몹)·보스·워든을 뺀 전부, 즉 **적대·중립 몬스터가 좀비 계열로 바뀐다.** 늑대처럼 몬스터 분류가 아닌 중립 몹은 대상이 아니다. 바뀐 몹은 원래 몹의 로직과 기믹을 이어받고, 원래 드랍에 좀비 드랍이 더해진다.
-- 처음부터 전부 좀비인 것은 아니다. **청크마다 감염 레벨(0~5)** 이 있고, 시즌 진행·국가 활동·정화 활동에 따라 오르내린다.
+- 몬스터로 분류되는 몹 중 비공격적 몹·보스·워든을 뺀 **적대·중립 몬스터가 감염 레벨에 따라 계열별로 좀비화된다**(Lv1 스켈레톤·거미 → Lv2 크리퍼·엔더맨 등 → Lv3 우민·가디언·네더 몹 등). 원종 엔티티와 기믹은 그대로, 좀비 특성과 좀비화 외형(서버 리소스팩)을 더하고, 원종 드랍과 좀비 드랍을 둘 다 준다.
+- 처음부터 전부 좀비인 것은 아니다. **청크마다 감염 레벨(0~5)** 이 있고, 시즌 진행·국가 활동·정화 활동에 따라 오르내린다. 레벨이 오르면 밤 스폰이 늘고(×1.5~2.0), Lv2 부터 낮에도 나오고 타지 않으며 좀비 떼가 찾아온다. 낮에는 모든 좀비가 태양광 알레르기로 약해진다.
 - 좀비가 많이 나오고 **변종**(러너, 비명꾼, 탱커, 알파 등)이 있다.
 - 플레이어마다 **좀비 처치 수와 좀비 스코어**(좀비마다 점수가 다름)를 기록하고 인게임에서 볼 수 있다.
-- 죽으면 소지품을 든 **망자 좀비**가 그 자리에 남는다(인벤세이브 대신).
+- 죽으면 소지품을 든 **망자 좀비**가 그 자리에 남는다(인벤세이브 대신). 주인만 쓰러뜨릴 수 있다.
 - **스타포스 강화**와 **커스텀 인첸트**(데이터팩 기반)를 넣는다.
-- 접속자는 **바닐라 클라이언트**로 들어온다. 모드·리소스팩 설치가 필요 없다.
+- 접속자는 **바닐라 클라이언트**로 들어온다. 모드 설치는 필요 없고, 서버 리소스팩만 자동으로 받는다.
 
 ## 문서
 
@@ -50,7 +50,8 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 |---|---|
 | [docs/design/zombification.md](docs/design/zombification.md) | 감염 레벨과 진척도 산정 방식 (원안 비교 포함) |
 | [docs/design/bloodmoon-and-cure.md](docs/design/bloodmoon-and-cure.md) | 블러드문(보름달 밤 + 동시 접속 트리거)과 치료제(서버 공동 연구) 검토. 시간 단위 규칙 |
-| [docs/design/mobs.md](docs/design/mobs.md) | 몹 변환표와 좀비 변종 |
+| [docs/design/mobs.md](docs/design/mobs.md) | 몹 좀비화: 레벨별 계열, 스폰 출처 규칙, 원종/좀비 루트, 좀비 변종 |
+| [docs/design/visuals.md](docs/design/visuals.md) | 좀비화 외형: 서버 리소스팩, 장비 레이어·머리 모델·블록벤치 리그, 텍스처 파이프라인 |
 | [docs/design/stats.md](docs/design/stats.md) | 좀비 처치 수·좀비 스코어, 점수표, 농장 악용 방지 |
 | [docs/design/death-and-revenant.md](docs/design/death-and-revenant.md) | 사망 처리: 망자 좀비 |
 | [docs/design/starforce.md](docs/design/starforce.md) | 스타포스 강화 |
@@ -64,4 +65,5 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 | [tools/sim/zomapo_sim.py](tools/sim/zomapo_sim.py) | 플레이 양상 시뮬레이터 (표준 라이브러리만 사용) |
 | [tools/sim/results.md](tools/sim/results.md) | 시뮬레이터 출력 원본 |
 | [tools/sim/load_sim.py](tools/sim/load_sim.py) | 서버 부하 시뮬레이터: 동시 접속·흩어짐 → 힙·틱 시간 ([load-results.md](tools/sim/load-results.md)) |
+| [tools/respack/zombify_textures.py](tools/respack/zombify_textures.py) | 바닐라 텍스처 → 좀비화 시안 텍스처(빌드 때 실행, Mojang 텍스처는 저장소에 넣지 않음) |
 | [tools/perf/bench.py](tools/perf/bench.py) | 서버 부하 실측: Carpet 봇으로 틱·힙·GC 측정. 자기 PC 에서도 실행 가능 ([results.md](tools/perf/results.md)) |
