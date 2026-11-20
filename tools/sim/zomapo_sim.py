@@ -5,6 +5,10 @@
 
     python3 zomapo_sim.py                 # 전체 시나리오, 결과를 표준 출력으로
     python3 zomapo_sim.py --runs 300 --out results.md
+    python3 zomapo_sim.py --ref 15/4      # 이전 판(15명/활성 4명 기준 보정) 재현
+
+인원은 '전체/활성'. 새 가정 17/8 · 20/10 · 23/12 와 이전 가정 15/4 · 10/3 을 함께 돌리고,
+좀비화 계수·치료제 비용은 --ref 인원(기본 20/10)에 맞춰 보정한다.
 
 모델의 가정과 수치의 의미는 docs/server/simulation.md 에 정리돼 있다.
 수치는 '예측'이 아니라 설계 선택지끼리 비교하기 위한 상대 지표다.
@@ -14,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import itertools
 import math
 import random
 import statistics
@@ -53,12 +56,35 @@ METHODS = {
     "G": "하이브리드 + 개인 숙련도 보정",
 }
 
+@dataclass(frozen=True)
+class Trigger:
+    """동시 접속 트리거 블러드문(대). 19:00~24:00 에 조건이 맞으면 발동."""
+    players: int = 3                 # 최소 동시 접속자
+    nations: int = 2                 # 최소 접속 국가 수
+    cooldown: int = 48               # 마지막 발동 후 대기(현실 시간)
+    force_after: int | None = None   # 이 시간 동안 발동이 없으면 다음 21시에 2명 이상이면 강제 개최
+
+
+@dataclass(frozen=True)
+class BloodMoon:
+    label: str
+    fullmoon: bool = False           # 게임 시간 보름달 밤(소)
+    weekly: bool = False             # 토 21시 고정(대)
+    trigger: Trigger | None = None
+
+
 BM_MODES = {
-    "weekly": "현실 시간 고정(토 21시)",
-    "fullmoon": "게임 시간 보름달(8 게임일마다)",
-    "trigger": "동시 접속 트리거(3명+·2개국+, 24시간 간격)",
-    "trigger48": "동시 접속 트리거(3명+·2개국+, 48시간 간격)",
-    "hybrid": "보름달(소) + 토 21시(대)",
+    "weekly": BloodMoon("현실 시간 고정(토 21시)", weekly=True),
+    "fullmoon": BloodMoon("게임 시간 보름달(8 게임일마다)", fullmoon=True),
+    "trigger": BloodMoon("트리거 3명+·2개국+, 24시간 간격", trigger=Trigger(3, 2, 24)),
+    "trigger48": BloodMoon("트리거 3명+·2개국+, 48시간 간격 (이전 제안)", trigger=Trigger(3, 2, 48)),
+    "t4n3": BloodMoon("트리거 4명+·3개국, 48시간 간격", trigger=Trigger(4, 3, 48)),
+    "t5n3": BloodMoon("트리거 5명+·3개국, 48시간 간격", trigger=Trigger(5, 3, 48)),
+    "t6n3": BloodMoon("트리거 6명+·3개국, 48시간 간격", trigger=Trigger(6, 3, 48)),
+    "t5n3f": BloodMoon("트리거 5명+·3개국, 48시간 간격, 72시간 무발동 시 21시 강제", trigger=Trigger(5, 3, 48, 72)),
+    "hybrid": BloodMoon("보름달(소) + 토 21시(대)", fullmoon=True, weekly=True),
+    "proposal": BloodMoon("제안: 보름달(소) + 트리거 5명+·3개국·48시간·72시간 강제(대)", fullmoon=True,
+                          trigger=Trigger(5, 3, 48, 72)),
 }
 
 
@@ -91,6 +117,7 @@ class Player:
     fun_sum: float = 0.0
     fun_hours: int = 0
     bm_big: int = 0
+    no_mate: int = 0                 # 같은 국가 접속자가 없던 접속 시간
     day_score: list = field(default_factory=lambda: [0.0] * DAYS)
     day_kills: list = field(default_factory=lambda: [0] * DAYS)
     day_hours: list = field(default_factory=lambda: [0] * DAYS)
@@ -200,6 +227,7 @@ def simulate(cfg: Config, seed: int) -> dict:
     nation_work = [[0.0] * DAYS for _ in range(3)]
     game_days = 0.0
     last_trigger = -10_000
+    bm = BM_MODES[cfg.bm]
 
     for d in range(DAYS):
         wd = weekday(d)
@@ -210,6 +238,7 @@ def simulate(cfg: Config, seed: int) -> dict:
             m["spread_calib"] = max(zt) - min(zt)
             m["calib_raw"] = statistics.fmean(x for x, _ in parts)
             m["calib_purify"] = statistics.fmean(y for _, y in parts)
+            m["calib_purify_cap"] = statistics.fmean(1.0 if y >= 0.999 else 0.0 for _, y in parts)
         if d in (6, 13, 20, 22):
             m["z_at"][d] = statistics.fmean(zt)
 
@@ -256,20 +285,25 @@ def simulate(cfg: Config, seed: int) -> dict:
             nations_present = sum(1 for g in by_nation if g)
 
             kind = None
-            if cfg.bm in ("weekly", "hybrid") and wd == 5 and h == 21 and d > 0:
+            if bm.weekly and wd == 5 and h == 21 and d > 0:
                 kind = "big"
-            if cfg.bm in ("fullmoon", "hybrid"):
+            tr = bm.trigger
+            if tr and kind is None and d >= 1:
+                if (19 <= h <= 24 and len(online) >= tr.players and nations_present >= tr.nations
+                        and abs_h - last_trigger >= tr.cooldown):
+                    kind = "big"
+                elif (tr.force_after and h == 21 and len(online) >= 2
+                        and abs_h - max(last_trigger, 0) >= tr.force_after):
+                    kind = "big"
+                if kind:
+                    last_trigger = abs_h
+            if bm.fullmoon:
                 before = game_days
                 game_days += GAME_DAYS_PER_HOUR      # 아무도 없으면 서버가 멈추므로 접속자가 있는 시간에만 흐른다
                 if kind is None and int(before // MOON_CYCLE) != int(game_days // MOON_CYCLE):
                     kind = "small"
-            cooldown = 48 if cfg.bm == "trigger48" else 24
-            if (cfg.bm.startswith("trigger") and kind is None and 19 <= h <= 24 and d >= 1 and len(online) >= 3
-                    and nations_present >= 2 and abs_h - last_trigger >= cooldown):
-                kind = "big"
-                last_trigger = abs_h
             if kind:
-                m["events"].append((kind, len(online), nations_present))
+                m["events"].append((kind, len(online), nations_present, h, d))
 
             airdrop = wd in (2, 4) and h == 22
             grouped = {}
@@ -290,6 +324,7 @@ def simulate(cfg: Config, seed: int) -> dict:
                     m["alone_server"] += 1
                 if mates == 0:
                     m["no_mate"] += 1
+                    p.no_mate += 1
                 if g:
                     fun_hour[pid] += 2.0
                 elif mates > 0:
@@ -398,6 +433,10 @@ def simulate(cfg: Config, seed: int) -> dict:
         for a in ARCH_ORDER}
     m["fun"] = sum(p.fun_sum for p in players) / max(1, sum(p.fun_hours for p in players))
     m["hours_by_arch"] = {a: statistics.fmean([p.hours for p in players if p.arch == a] or [0.0]) for a in ARCH_ORDER}
+    m["no_mate_by_arch"] = {
+        a: sum(p.no_mate for p in players if p.arch == a) / max(1.0, sum(p.hours for p in players if p.arch == a))
+        for a in ARCH_ORDER}
+    m["nation_score"] = statistics.fmean(sum(p.score for p in players if p.nation == n) for n in range(3))
     cores = [p for p in players if p.arch == "core"]
     m["kda_core"] = statistics.fmean([(p.pk + p.pa) / max(1, p.deaths) for p in cores] or [0.0])
     m["kda_core_pvp"] = statistics.fmean([(p.pk + p.pa) / max(1, p.pd) for p in cores] or [0.0])
@@ -405,7 +444,9 @@ def simulate(cfg: Config, seed: int) -> dict:
     m["pk_core"] = statistics.fmean([p.pk for p in cores] or [0.0])
     m["bm_reach"] = sum(1 for p in played if p.bm_big > 0) / max(1, len(played))
     m["nation_imbalance"] = max(nation_hours) / max(1.0, min(nation_hours))
-    m["zero_core_nation"] = any(not any(p.arch == "core" and p.nation == n for p in players) for n in range(3))
+    core_counts = [sum(1 for p in cores if p.nation == n) for n in range(3)]
+    m["zero_core_nation"] = min(core_counts) == 0
+    m["core_gap"] = max(core_counts) - min(core_counts)
     m["corr"] = corr(nation_hours, nation_z_calib)
     m["nation_hours"] = nation_hours
     m["nation_work"] = nation_work
@@ -521,15 +562,34 @@ def day_label(d) -> str:
     return f"{date.month}/{date.day}"
 
 
-def prob_zero_core(n: int, active: int) -> float:
+def core_split(n: int, active: int) -> dict:
+    """완전 랜덤 편성(국가 인원 ⌈n/3⌉·⌊n/3⌋)에서 핵심 유저가 국가에 나뉘는 분포. 다변량 초기하분포로 정확히 계산."""
     sizes = [n // 3 + (1 if i < n % 3 else 0) for i in range(3)]
-    team_of = [t for t, s in enumerate(sizes) for _ in range(s)]
-    total = bad = 0
-    for combo in itertools.combinations(range(n), active):
-        total += 1
-        if len({team_of[i] for i in combo}) < 3:
-            bad += 1
-    return bad / total
+    total = math.comb(n, active)
+    out = {"zero": 0.0, "le1": 0.0, "gap2": 0.0, "gap3": 0.0}
+    for c0 in range(active + 1):
+        for c1 in range(active - c0 + 1):
+            c2 = active - c0 - c1
+            p = math.comb(sizes[0], c0) * math.comb(sizes[1], c1) * math.comb(sizes[2], c2) / total
+            cs = (c0, c1, c2)
+            out["zero"] += p if min(cs) == 0 else 0.0
+            out["le1"] += p if min(cs) <= 1 else 0.0
+            out["gap2"] += p if max(cs) - min(cs) >= 2 else 0.0
+            out["gap3"] += p if max(cs) - min(cs) >= 3 else 0.0
+    return out
+
+
+def prob_zero_core(n: int, active: int) -> float:
+    return core_split(n, active)["zero"]
+
+
+def bm_saturation(rs, cooldown: int) -> float:
+    """연속한 대 이벤트 사이 간격이 쿨다운과 정확히 같은(쿨다운이 끝나자마자 다시 터진) 비율."""
+    gaps = []
+    for r in rs:
+        ts = [e[4] * 24 + e[3] for e in r["events"] if e[0] == "big"]
+        gaps += [b - a for a, b in zip(ts, ts[1:])]
+    return sum(1 for g in gaps if g == cooldown) / len(gaps) if gaps else 0.0
 
 
 def mean(rs, key):
@@ -548,25 +608,37 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=200)
     ap.add_argument("--seed", type=int, default=20270116)
+    ap.add_argument("--ref", type=str, default="20/10",
+                    help="보정 기준 인원 '전체/활성'. 2026-11-20 에 15/4 → 20/10 으로 바꿨다(이전 판 재현은 --ref 15/4)")
     ap.add_argument("--out", type=str, default="")
     args = ap.parse_args()
+    ref = tuple(int(x) for x in args.ref.split("/"))
     out: list[str] = []
     w = out.append
     end = SEASON_START + datetime.timedelta(days=DAYS - 1)
+    rlab = f"{ref[0]}/{ref[1]}"
+
+    # 새 인원 가정(최대 20±3명, 활성 8~10+α명)과 이전 가정(10~15명, 활성 3~4명) 기준점
+    pops = [(10, 3), (15, 4), (17, 8), (20, 10), (23, 12)]
+    if ref not in pops:
+        pops.append(ref)
+    show = [ref] + [p for p in reversed(pops) if p != ref]     # 자세한 표는 기준 인원부터
 
     w("# 시뮬레이션 결과 (자동 생성)\n")
-    w(f"`python3 tools/sim/zomapo_sim.py --runs {args.runs} --seed {args.seed}` 로 생성. "
+    w(f"`python3 tools/sim/zomapo_sim.py --runs {args.runs} --seed {args.seed}"
+      + ("" if args.ref == "20/10" else f" --ref {args.ref}") + "` 로 생성. "
       f"시즌 {SEASON_START.isoformat()} ~ {end.isoformat()} ({DAYS}일). 시나리오마다 반복 횟수만큼 돌린 평균이다. "
-      "기본 설정은 좀비화 방식 G, 균형 편성, 블러드문 hybrid.\n")
+      "기본 설정은 좀비화 방식 G, 균형 편성, 블러드문 hybrid(보름달 + 토 21시).\n")
+    w(f"인원은 '전체/활성(하루 2시간 이상)'. 새 가정은 17/8 · 20/10 · 23/12, 이전 가정 기준점은 15/4 · 10/3. "
+      f"좀비화 계수와 치료제 비용은 **{rlab}** 에 맞춰 보정하고 다른 인원에도 같은 값을 썼다.\n")
 
-    ks = {m_: calibrate(15, 4, m_, max(30, args.runs // 4), args.seed) for m_ in METHODS}
+    ks = {m_: calibrate(ref[0], ref[1], m_, max(30, args.runs // 4), args.seed) for m_ in METHODS}
 
     def base(n, a, **kw):
         return Config(n, a, k=ks[kw.get("method", "G")], **kw)
 
-    pops = [(10, 3), (12, 3), (12, 4), (15, 3), (15, 4)]
     w("## 1. 인원 시나리오별 플레이 양상\n")
-    w("| 전체/활성 | 황금시간 평균 동접 | 서버에 혼자인 시간 | 자국민 없이 노는 시간 | 주간 PvP 교전(서버 전체) | 핵심 1인 시즌 PvP 킬 | 핵심 1인 시즌 사망 | 핵심 KDA(전체 사망) | 핵심 KDA(PvP 사망만) | 마지막 7일 잔존율 | 평균 재미 |")
+    w("| 전체/활성 | 황금시간(21~23시) 평균 동접 | 서버에 혼자인 시간 | 자국민 없이 노는 시간 | 주간 PvP 교전(서버 전체) | 핵심 1인 시즌 PvP 킬 | 핵심 1인 시즌 사망 | 핵심 KDA(전체 사망) | 핵심 KDA(PvP 사망만) | 마지막 7일 잔존율 | 평균 재미 |")
     w("|---|---|---|---|---|---|---|---|---|---|---|")
     pop_results = {}
     for n, a in pops:
@@ -584,35 +656,64 @@ def main() -> None:
     w("### 1-1. 주차별 활동 인원\n")
     w("| 시나리오 | 지표 | 1주차 (1/16~22) | 2주차 (1/23~29) | 3주차 (1/30~2/5) |")
     w("|---|---|---|---|---|")
-    for key in ((15, 4), (10, 3)):
+    for key in show:
         rs = pop_results[key]
         for label, f_ in (("주 1시간 이상 접속", "weekly_active"), ("하루 2시간 이상(주 14시간)", "weekly_2h")):
             vals = " | ".join(fmt(statistics.fmean(r[f_][wk] for r in rs), 1) for wk in (1, 2, 3))
             w(f"| {key[0]}/{key[1]} | {label} | {vals} |")
     w("")
 
-    w("### 1-2. 시간대별 평균 동시 접속자 (15/4)\n")
-    rs = pop_results[(15, 4)]
+    w("### 1-2. 시간대별 평균 동시 접속자\n")
     hours = list(range(14, 26))
-    w("| 구분 | " + " | ".join(f"{h % 24}시" for h in hours) + " |")
-    w("|---|" + "---|" * len(hours))
-    for label, key, days in (("평일", "conc_wd", "wd_days"), ("주말", "conc_we", "we_days")):
-        w(f"| {label} | " + " | ".join(fmt(statistics.fmean(r[key][h] / max(1, r[days]) for r in rs), 1) for h in hours) + " |")
+    w("| 시나리오 | 구분 | " + " | ".join(f"{h % 24}시" for h in hours) + " |")
+    w("|---|---|" + "---|" * len(hours))
+    for key in show:
+        rs = pop_results[key]
+        for label, ck, days in (("평일", "conc_wd", "wd_days"), ("주말", "conc_we", "we_days")):
+            w(f"| {key[0]}/{key[1]} | {label} | "
+              + " | ".join(fmt(statistics.fmean(r[ck][h] / max(1, r[days]) for r in rs), 1) for h in hours) + " |")
     w("")
 
-    w("### 1-3. 아키타입별 시즌 누적 플레이 시간과 재미 (15/4)\n")
-    w("| 아키타입 | 시즌 누적 시간 | 시간당 재미 |")
-    w("|---|---|---|")
-    for a in ARCH_ORDER:
-        w(f"| {ARCH[a]['label']} | {fmt(statistics.fmean(r['hours_by_arch'][a] for r in rs), 0)}h "
-          f"| {fmt(statistics.fmean(r['fun_by_arch'][a] for r in rs))} |")
+    w("### 1-3. 아키타입별 시즌 누적 플레이 시간과 재미\n")
+    w("| 아키타입 | " + " | ".join(f"{n}/{a} 누적 시간 · 시간당 재미" for n, a in show) + " |")
+    w("|---|" + "---|" * len(show))
+    for a_ in ARCH_ORDER:
+        cells = []
+        for key in show:
+            rs = pop_results[key]
+            cells.append(f"{fmt(statistics.fmean(r['hours_by_arch'][a_] for r in rs), 0)}h · "
+                         f"{fmt(statistics.fmean(r['fun_by_arch'][a_] for r in rs))}")
+        w(f"| {ARCH[a_]['label']} | " + " | ".join(cells) + " |")
+    w("")
+
+    w("### 1-4. 아키타입별 자국민 없이 노는 시간\n")
+    w("그 아키타입의 접속 시간 가운데 같은 국가 사람이 아무도 접속해 있지 않던 비율.\n")
+    w("| 아키타입 | " + " | ".join(f"{n}/{a}" for n, a in show) + " |")
+    w("|---|" + "---|" * len(show))
+    for a_ in ARCH_ORDER:
+        w(f"| {ARCH[a_]['label']} | "
+          + " | ".join(pct(statistics.fmean(r["no_mate_by_arch"][a_] for r in pop_results[key])) for key in show) + " |")
     w("")
 
     w("## 2. 좀비화 진척도 산정 방식 비교\n")
-    w(f"모든 방식은 15명/활성 4명 기준으로 2주차 마지막 날({day_label(CALIB_DAY)}) 평균 영토 레벨이 3.0 이 되도록 계수를 보정했고, "
-      "10명/활성 3명에도 같은 계수를 썼다. 레벨 칸은 그날 세 국가 영토 레벨의 평균. "
+    w(f"모든 방식은 {ref[0]}명/활성 {ref[1]}명 기준으로 2주차 마지막 날({day_label(CALIB_DAY)}) 평균 영토 레벨이 {CALIB_TARGET} 이 되도록 계수를 보정했고, "
+      "다른 인원에도 같은 계수를 썼다. 레벨 칸은 그날 세 국가 영토 레벨의 평균. "
       "A~E 는 영토(+접경) 밖을 레벨 0 으로 둔 원안, F·G 는 전역 시간 램프가 황야에도 적용된다.\n")
-    for n, a in ((15, 4), (10, 3)):
+
+    w("### 2-1. 보정 기준 인원에 따른 k (방식 G)\n")
+    w(f"'그 인원에서 보정한 k' 는 각 인원을 기준으로 따로 맞춘 값이다. 나머지 칸은 {rlab} 에서 보정한 k={ks['G']:.3f} 를 그대로 썼을 때 "
+      f"보정일({day_label(CALIB_DAY)})의 값. 열기·정화는 세 국가 평균, '정화 상한' 은 정화가 상한 1.0 에 닿은 국가의 비율.\n")
+    w(f"| 전체/활성 | 그 인원에서 보정한 k | 기준 k 로 {day_label(CALIB_DAY)} 평균 레벨 | 열기 H | k·H | 정화 | 정화 상한 도달 | 보정일 국가 간 격차 |")
+    w("|---|---|---|---|---|---|---|---|")
+    for n, a in show:
+        k_here = ks["G"] if (n, a) == ref else calibrate(n, a, "G", max(30, args.runs // 4), args.seed)
+        rs = run_many(base(n, a), args.runs, args.seed + 1)
+        heat = mean(rs, "calib_raw")
+        w(f"| {n}/{a} | {k_here:.3f} | {fmt(statistics.fmean(r['z_at'][CALIB_DAY] for r in rs))} | {fmt(heat)} "
+          f"| {fmt(ks['G'] * heat)} | {fmt(mean(rs, 'calib_purify'))} | {pct(mean(rs, 'calib_purify_cap'))} | {fmt(mean(rs, 'spread_calib'))} |")
+    w("")
+
+    for n, a in show:
         w(f"### {n}명 / 활성 {a}명\n")
         w(f"| 방식 | {day_label(6)} | {day_label(13)} | {day_label(20)} | {day_label(22)} | 보정일 국가 간 격차 | 국가 활동량↔레벨 상관 | 너무 어려움 | 너무 쉬움 | 평균 재미 | 마지막 7일 잔존율 |")
         w("|---|---|---|---|---|---|---|---|---|---|---|")
@@ -625,57 +726,66 @@ def main() -> None:
         w("")
 
     w("## 3. 국가 편성 방식 비교\n")
-    w("| 전체/활성 | 편성 | 핵심 유저 0명인 국가가 생길 확률(시뮬) | 국가 간 플레이시간 비(최대/최소) | 자국민 없이 노는 시간 | 마지막 7일 잔존율 |")
-    w("|---|---|---|---|---|---|")
-    for n, a in ((15, 4), (10, 3)):
+    w("'균형'은 상호평가(활동량 추정, 오차 ±30%) 순 스네이크 드래프트로, 실제 결정안(국가 추첨식, `team_sim.py`)의 대용이다.\n")
+    w("| 전체/활성 | 편성 | 핵심 유저 0명인 국가가 생길 확률(시뮬) | 핵심 유저 수 격차 2명 이상 | 국가 간 플레이시간 비(최대/최소) | 자국민 없이 노는 시간 | 마지막 7일 잔존율 |")
+    w("|---|---|---|---|---|---|---|")
+    for n, a in show:
         for mode, label in (("random", "완전 랜덤"), ("balanced", "상호평가 기반 균형")):
             rs = run_many(base(n, a, assign=mode), args.runs, args.seed + 2)
-            w(f"| {n}/{a} | {label} | {pct(mean(rs, 'zero_core_nation'))} | {fmt(mean(rs, 'nation_imbalance'))} "
-              f"| {pct(mean(rs, 'no_mate') / mean(rs, 'player_hours'))} | {pct(mean(rs, 'retained'))} |")
+            w(f"| {n}/{a} | {label} | {pct(mean(rs, 'zero_core_nation'))} | {pct(statistics.fmean(1.0 if r['core_gap'] >= 2 else 0.0 for r in rs))} "
+              f"| {fmt(mean(rs, 'nation_imbalance'))} | {pct(mean(rs, 'no_mate') / mean(rs, 'player_hours'))} | {pct(mean(rs, 'retained'))} |")
     w("")
-    w("### 3-1. 완전 랜덤 편성 시 핵심 유저가 한 명도 없는 국가가 생길 정확한 확률\n")
-    w("| 전체 인원 | 활성 3명 | 활성 4명 |")
-    w("|---|---|---|")
-    for n in (10, 12, 15):
-        w(f"| {n} | {fmt(100 * prob_zero_core(n, 3), 1)}% | {fmt(100 * prob_zero_core(n, 4), 1)}% |")
+    w("### 3-1. 완전 랜덤 편성 시 핵심 유저 분포 (정확한 확률, 다변량 초기하분포)\n")
+    w("| 전체/활성 | 국가 인원 | 핵심 0명인 국가 | 핵심 1명 이하인 국가 | 국가 간 핵심 격차 2명 이상 | 3명 이상 |")
+    w("|---|---|---|---|---|---|")
+    for n, a in sorted(set(show) | {(20, 8), (20, 12)}, key=lambda x: (x[0], x[1])):
+        s = core_split(n, a)
+        sizes = "/".join(str(n // 3 + (1 if i < n % 3 else 0)) for i in range(3))
+        w(f"| {n}/{a} | {sizes} | {fmt(100 * s['zero'], 1)}% | {fmt(100 * s['le1'], 1)}% | {fmt(100 * s['gap2'], 1)}% | {fmt(100 * s['gap3'], 1)}% |")
     w("")
 
     w("## 4. 블러드문(호드 밤) 방식 비교\n")
     w("'대'는 예고된 큰 이벤트(국가 무관 집결 가정), '소'는 예고 없는 보름달 밤. 보름달은 게임 시간 기준이고, "
-      "서버가 비면 멈추는 설정(pause-when-empty)이라 접속자가 있는 동안에만 게임 시간이 흐른다고 가정했다.\n")
+      "서버가 비면 멈추는 설정(pause-when-empty)이라 접속자가 있는 동안에만 게임 시간이 흐른다고 가정했다. "
+      "트리거는 19:00~24:00 에 조건을 보고, '강제'는 72시간 동안 발동이 없으면 다음 21시에 2명 이상이면 연다. "
+      "48시간 쿨다운이면 시즌 최대 11회다. '쿨다운 직후 발동'은 연속한 두 블러드문 간격이 쿨다운과 정확히 같은 비율로, "
+      "높을수록 조건이 사람 모임을 가려내지 못하고 타이머처럼 돈다는 뜻이다.\n")
     bm_results = {}
-    for n, a in ((15, 4), (10, 3)):
+    for n, a in show:
         w(f"### {n}명 / 활성 {a}명\n")
-        w("| 방식 | 종류 | 시즌 중 횟수 | 회당 평균 참가자 | 2명 이상 참가한 비율 | 2개국 이상 참가한 비율 | 대 이벤트를 한 번 이상 겪은 플레이어 | 평균 재미 | 마지막 7일 잔존율 |")
-        w("|---|---|---|---|---|---|---|---|---|")
-        for mode, label in BM_MODES.items():
+        w("| 방식 | 종류 | 시즌 중 횟수 | 회당 평균 참가자 | 2명 이상 참가 | 2개국 이상 | 3개국 모두 | 쿨다운 직후 발동 | 대 이벤트를 한 번 이상 겪은 플레이어 | 평균 재미 | 마지막 7일 잔존율 |")
+        w("|---|---|---|---|---|---|---|---|---|---|---|")
+        for mode, bmode in BM_MODES.items():
             rs = run_many(base(n, a, bm=mode), args.runs, args.seed + 3)
             bm_results[(n, a, mode)] = rs
             for kind, kl in (("big", "대"), ("small", "소")):
                 evs = [e for r in rs for e in r["events"] if e[0] == kind]
                 if not evs:
                     continue
-                w(f"| {label} | {kl} | {fmt(len(evs) / len(rs), 1)} | {fmt(statistics.fmean(e[1] for e in evs), 1)} "
+                sat = (pct(bm_saturation(rs, bmode.trigger.cooldown))
+                       if kind == "big" and bmode.trigger else "—")
+                w(f"| {bmode.label} | {kl} | {fmt(len(evs) / len(rs), 1)} | {fmt(statistics.fmean(e[1] for e in evs), 1)} "
                   f"| {pct(sum(1 for e in evs if e[1] >= 2) / len(evs))} | {pct(sum(1 for e in evs if e[2] >= 2) / len(evs))} "
+                  f"| {pct(sum(1 for e in evs if e[2] >= 3) / len(evs))} | {sat} "
                   f"| {pct(mean(rs, 'bm_reach')) if kind == 'big' else '—'} | {fmt(mean(rs, 'fun'))} | {pct(mean(rs, 'retained'))} |")
         w("")
 
     w("## 5. 치료제 연구 방식 비교\n")
-    ref = bm_results[(15, 4, "hybrid")]
-    stage_cost = statistics.median(max(cumsum(r["nation_work"][n])[17] for n in range(3)) for r in ref) / CURE_STAGES
-    total_shared = statistics.median(sum(cumsum(r["nation_work"][n])[18] for n in range(3)) for r in ref)
-    w(f"연구 진척 = 접속 1시간당 (그룹 1.5 / 솔로 1.0) × 장비 보정 + 블러드문 참가 보너스. "
-      f"단계 비용은 15명/활성 4명에서 '선두 국가'가 {day_label(17)} 에 {CURE_STAGES}단계를 끝내도록, "
-      f"공동 연구 총량은 서버 전체가 {day_label(18)} 에 끝내도록 맞췄고, 10명/활성 3명에도 같은 비용을 썼다.\n")
-    ref_total = statistics.median(sum(sum(w_) for w_ in r["nation_work"]) for r in ref)
-    w("'비용 조정'은 그 서버의 총 연구량(중앙값)에 비례해 비용을 줄인 경우다. 실제로는 첫 3~4일의 활동량을 보고 운영자가 비용을 확정하는 방식에 해당한다.\n")
+    refrs = bm_results[(ref[0], ref[1], "hybrid")]
+    stage_cost = statistics.median(max(cumsum(r["nation_work"][n])[17] for n in range(3)) for r in refrs) / CURE_STAGES
+    total_shared = statistics.median(sum(cumsum(r["nation_work"][n])[18] for n in range(3)) for r in refrs)
+    w(f"연구 진척 = 접속 1시간당 (그룹 1.5 / 솔로 1.0) × 장비 보정 + 블러드문 참가 보너스(블러드문은 hybrid). "
+      f"단계 비용은 {ref[0]}명/활성 {ref[1]}명에서 '선두 국가'가 {day_label(17)} 에 {CURE_STAGES}단계를 끝내도록, "
+      f"공동 연구 총량은 서버 전체가 {day_label(18)} 에 끝내도록 맞췄고, 다른 인원에도 같은 비용을 썼다.\n")
+    ref_total = statistics.median(sum(sum(w_) for w_ in r["nation_work"]) for r in refrs)
+    w("'비용 조정'은 그 서버의 총 연구량(중앙값)에 비례해 비용을 바꾼 경우다. 실제로는 첫 3~4일의 활동량을 보고 운영자가 비용을 확정하는 방식에 해당한다.\n")
     w("| 전체/활성 | 방식 | 비용 | 시즌 안 완성 확률 | 완성일(중앙값) | 우승국 = 플레이시간 1위 국가 | 꼴찌 국가 최종 진척 | 2개국 이상 완성 |")
     w("|---|---|---|---|---|---|---|---|")
     shared_rows = []
-    for n, a in ((15, 4), (10, 3)):
+    for n, a in show:
         rs = bm_results[(n, a, "hybrid")]
         scale = statistics.median(sum(sum(w_) for w_ in r["nation_work"]) for r in rs) / ref_total
-        costs = [("고정", 1.0)] + ([("조정", scale)] if (n, a) != (15, 4) else [])
+        costs = [("고정", 1.0)] + ([("조정", scale)] if (n, a) != ref else [])
         for cost_label, sc in costs:
             for catchup, label in ((False, "R1. 국가 레이스"), (True, "R2. 국가 레이스 + 따라잡기")):
                 s = cure_stats_race(rs, stage_cost * sc, catchup)
@@ -687,6 +797,31 @@ def main() -> None:
     w("|---|---|---|---|---|---|---|")
     for n, a, cost_label, s in shared_rows:
         w(f"| {n}/{a} | R3. 서버 공동 연구 | {cost_label} | {pct(s['p_finish'])} | {day_label(s['finish_day'])} | {pct(s['top_share'])} | {pct(s['min_share'])} |")
+    w("")
+    w(f"### 5-1. 비용 확정식의 배수: {day_label(18)} 까지 누적 연구량 ÷ 첫 72시간({day_label(0)}~{day_label(2)}) 연구량\n")
+    w("| 전체/활성 | 중앙값 | 10% | 90% | 첫 72시간 서버 연구량(중앙값) |")
+    w("|---|---|---|---|---|")
+    for n, a in show:
+        rs = bm_results[(n, a, "hybrid")]
+        ratios, firsts = [], []
+        for r in rs:
+            cs = cumsum([sum(r["nation_work"][k][d] for k in range(3)) for d in range(DAYS)])
+            ratios.append(cs[18] / max(1e-9, cs[2]))
+            firsts.append(cs[2])
+        q = statistics.quantiles(ratios, n=10)
+        w(f"| {n}/{a} | {fmt(statistics.median(ratios))} | {fmt(q[0])} | {fmt(q[-1])} | {fmt(statistics.median(firsts), 0)} |")
+    w("")
+    w("## 6. 국가 규모 지표 (국가별 상한 검토용)\n")
+    w("주민 상한·영토 상한처럼 '국가당' 으로 정한 값이 인원에 따라 얼마나 달라지는지 보기 위한 참고 지표. "
+      "주민·영토는 모델에 없으므로 이 표는 규모만 보여 준다. 기본 설정(G, 균형 편성, hybrid). 배수는 15/4 대비.\n")
+    w("| 전체/활성 | 국가당 인원 | 국가당 핵심 | 국가당 시즌 플레이 시간 | 국가 좀비 스코어 합(시즌 말) | 스코어 배수 | √ 배수 |")
+    w("|---|---|---|---|---|---|---|")
+    base_score = statistics.fmean(r["nation_score"] for r in pop_results[(15, 4)])
+    for n, a in show:
+        rs = pop_results[(n, a)]
+        sc = statistics.fmean(r["nation_score"] for r in rs)
+        nh = statistics.fmean(statistics.fmean(r["nation_hours"]) for r in rs)
+        w(f"| {n}/{a} | {fmt(n / 3, 1)} | {fmt(a / 3, 1)} | {fmt(nh, 0)}h | {fmt(sc, 0)} | ×{fmt(sc / base_score)} | ×{fmt(math.sqrt(sc / base_score))} |")
     w("")
     w("보정 계수: " + ", ".join(f"{m_}={ks[m_]:.5f}" for m_ in METHODS) + f", 단계 비용={stage_cost:.1f}, 공동 총량={total_shared:.1f}\n")
 
