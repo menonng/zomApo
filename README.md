@@ -60,6 +60,7 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 |---|---|
 | [tools/sim/zomapo_sim.py](tools/sim/zomapo_sim.py) | 플레이 양상 시뮬레이터 (표준 라이브러리만 사용) |
 | [tools/sim/results.md](tools/sim/results.md) | 시뮬레이터 출력 원본 |
+| [tools/sim/heat_compare.py](tools/sim/heat_compare.py) | 국가 영토 레벨 기준 비교: 처치 수·스코어·기본 스코어 ([heat-compare.md](tools/sim/heat-compare.md)) |
 | [tools/sim/team_sim.py](tools/sim/team_sim.py) | 국가 편성 방식 비교 ([team-results.md](tools/sim/team-results.md)) |
 | [tools/sim/starforce_sim.py](tools/sim/starforce_sim.py) | 스타포스 비용·운 분포 |
 | [tools/sim/load_sim.py](tools/sim/load_sim.py) | 서버 부하 시뮬레이터: 동시 접속·흩어짐 → 힙·틱 시간 ([load-results.md](tools/sim/load-results.md)) |

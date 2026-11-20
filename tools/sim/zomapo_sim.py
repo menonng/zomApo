@@ -36,6 +36,7 @@ WINDOW = 3                                   # 하이브리드 방식의 국가 
 GAME_DAYS_PER_HOUR = 3.0                     # 게임 하루 = 현실 20분
 MOON_CYCLE = 8                               # 보름달 주기(게임 일)
 CURE_STAGES = 3
+SCORE_DIVISOR = 64.0                         # 스코어 열기의 나눗수: 처치 수 40 × 처치당 평균 기본 점수 약 1.6
 
 ARCH = {
     # p_wd/p_we: 평일/주말 접속 확률, hours: 평균 세션 길이(시간)
@@ -54,6 +55,8 @@ METHODS = {
     "E": "편차 보정 평균(평균+1σ 상한)",
     "F": "하이브리드(지역 레벨만)",
     "G": "하이브리드 + 개인 숙련도 보정",
+    "S": "하이브리드, 열기 = 국가 좀비 스코어(레벨 배율 포함)",
+    "T": "하이브리드, 열기 = 국가 좀비 스코어(기본 점수, 레벨 배율 제외)",
 }
 
 @dataclass(frozen=True)
@@ -119,6 +122,7 @@ class Player:
     bm_big: int = 0
     no_mate: int = 0                 # 같은 국가 접속자가 없던 접속 시간
     day_score: list = field(default_factory=lambda: [0.0] * DAYS)
+    day_base: list = field(default_factory=lambda: [0.0] * DAYS)
     day_kills: list = field(default_factory=lambda: [0] * DAYS)
     day_hours: list = field(default_factory=lambda: [0] * DAYS)
     day_group: list = field(default_factory=lambda: [0] * DAYS)
@@ -198,9 +202,16 @@ def nation_levels(cfg: Config, players: list[Player], d: int):
             sd = statistics.pstdev(cum)
             raw = statistics.fmean(min(c, mu + sd) for c in cum)
         else:
-            recent = sum(p.recent(p.day_kills, d, WINDOW) for p in mem)
             actives = sum(1 for p in mem if p.recent(p.day_hours, d, WINDOW) >= 1)
-            heat = math.log1p(recent / max(1, actives) / 40.0)
+            if cfg.method == "S":
+                recent = sum(p.recent(p.day_score, d, WINDOW) for p in mem)
+                heat = math.log1p(recent / max(1, actives) / SCORE_DIVISOR)
+            elif cfg.method == "T":
+                recent = sum(p.recent(p.day_base, d, WINDOW) for p in mem)
+                heat = math.log1p(recent / max(1, actives) / SCORE_DIVISOR)
+            else:
+                recent = sum(p.recent(p.day_kills, d, WINDOW) for p in mem)
+                heat = math.log1p(recent / max(1, actives) / 40.0)
             group_h = sum(p.recent(p.day_group, d, WINDOW) for p in mem)
             purify = min(1.0, 0.18 * math.sqrt(group_h))
             parts.append((heat, purify))
@@ -241,6 +252,8 @@ def simulate(cfg: Config, seed: int) -> dict:
             m["calib_purify_cap"] = statistics.fmean(1.0 if y >= 0.999 else 0.0 for _, y in parts)
         if d in (6, 13, 20, 22):
             m["z_at"][d] = statistics.fmean(zt)
+            m.setdefault("z_max", {})[d] = max(zt)
+            m.setdefault("z_spread", {})[d] = max(zt) - min(zt)
 
         sessions: dict[int, list[Player]] = {h: [] for h in range(10, 26)}
         for p in players:
@@ -359,6 +372,7 @@ def simulate(cfg: Config, seed: int) -> dict:
                 p.kills += kills
                 p.score += gained
                 p.day_score[d] += gained
+                p.day_base[d] += gained / (1.0 + 0.1 * z)   # 기본 점수 = 레벨 배율(1 + 0.1·레벨)을 뺀 점수
                 p.day_kills[d] += kills
                 p.day_hours[d] += 1
                 if g:
@@ -473,7 +487,7 @@ def calibrate(n: int, active: int, method: str, runs: int, seed: int) -> float:
         if raw <= 1e-9:
             k *= 3.0
             continue
-        base = global_ramp(CALIB_DAY) - purify if method in "FG" else 0.0
+        base = global_ramp(CALIB_DAY) - purify if method not in "ABCDE" else 0.0
         k = 0.5 * k + 0.5 * (CALIB_TARGET - base) / raw
     return k
 

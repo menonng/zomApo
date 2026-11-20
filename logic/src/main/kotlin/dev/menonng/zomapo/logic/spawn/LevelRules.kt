@@ -97,21 +97,25 @@ data class ZombieBuffs(
 /**
  * 네더 레벨. docs/design/zombies.md '차원별 레벨'.
  *
- * 기본 레벨 = 탐험한 비율에 비례(0 에서 시작, 절반을 탐험하면 3). 네더 보더 1,000 × 1,000 = 63 × 63 청크.
+ * 기본 레벨 = 플레이어가 로드한 청크 비율에 비례(0 에서 시작, 절반이면 3). 네더 보더 1,000 × 1,000 = 63 × 63 청크.
  * 여기에 근처 플레이어의 좀비 스코어로 그 주변(플레이어를 중심으로) 레벨을 올린다.
  * 청크마다 값을 저장하지 않고, 몹이 태어날 때와 화면 표시 때만 계산한다.
  */
 object NetherLevels {
     const val SIDE_CHUNKS = 63
     const val TOTAL_CHUNKS = SIDE_CHUNKS * SIDE_CHUNKS
-    const val MARK_RADIUS = 2                 // 플레이어가 선 청크 기준 반경 2청크(5×5)를 '탐험함'으로 표시
+    /**
+     * 플레이어 때문에 로드되어 돌아간 청크를 센다: 플레이어가 선 청크 기준 반경 = 서버 시뮬레이션 거리(기본 6, 13×13).
+     * 사전 생성(Chunky)으로 로드된 청크는 세지 않는다. 시야 거리(10) 기준으로 바꾸면 훨씬 빨리 찬다.
+     */
+    const val MARK_RADIUS = 6
     const val SCORE_BONUS_CAP = 1.5
     const val SCORE_SCALE = 1500.0
     const val FULL_RADIUS = 32.0              // 이 거리 안은 보너스 전부
     const val ZERO_RADIUS = 128.0             // 이 거리 밖은 보너스 없음
     const val END_FIXED = 3.0
 
-    /** 탐험 비율 → 기본 레벨: 6 × 비율 (절반이면 3), 최대 5. */
+    /** 로드된 비율 → 기본 레벨: 6 × 비율 (절반이면 3), 최대 5. */
     fun base(exploredChunks: Int, total: Int = TOTAL_CHUNKS): Double =
         (6.0 * exploredChunks.coerceAtLeast(0) / total).coerceIn(0.0, LevelRules.MAX_LEVEL.toDouble())
 

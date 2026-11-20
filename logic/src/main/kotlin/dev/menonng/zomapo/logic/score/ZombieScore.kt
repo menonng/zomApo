@@ -30,9 +30,15 @@ object ZombieScore {
         else -> 0.5
     }
 
-    /** 농장 감쇠를 빼고 계산한 점수. */
+    /** 농장 감쇠를 빼고 계산한 점수. 개인 기록·순위에 쓴다. */
     fun raw(ctx: KillContext): Double =
         ctx.baseScore * levelMultiplier(ctx.spawnLevel) * ctx.source.multiplier * contributionMultiplier(ctx)
+
+    /**
+     * 국가 감염 열기에 쓰는 '기본 좀비 스코어': [raw] 에서 레벨 배율만 뺀 값.
+     * 레벨 배율까지 넣으면 '레벨↑ → 점수↑ → 레벨↑'로 스스로 가속한다(tools/sim/heat-compare.md).
+     */
+    fun forHeat(ctx: KillContext): Double = ctx.baseScore * ctx.source.multiplier * contributionMultiplier(ctx)
 }
 
 /**

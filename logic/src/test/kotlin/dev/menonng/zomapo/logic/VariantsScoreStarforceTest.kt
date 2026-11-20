@@ -58,6 +58,7 @@ class ZombieScoreTest {
     @DisplayName("점수 보정 조합")
     fun case05() {
         val base = KillContext(baseScore = 6.0, spawnLevel = 4.0, source = SpawnSource.NATURAL, damageShare = 0.8, environmentOnly = false)
+        assertEquals(6.0, ZombieScore.forHeat(base), 1e-9)   // 국가 열기용은 레벨 배율(×1.4) 없이
         assertEquals(6.0 * 1.4, ZombieScore.raw(base), 1e-9)
         assertEquals(6.0 * 1.4 * 0.2, ZombieScore.raw(base.copy(source = SpawnSource.SPAWNER)), 1e-9)
         assertEquals(6.0 * 1.4 * 0.5, ZombieScore.raw(base.copy(damageShare = 0.3)), 1e-9)

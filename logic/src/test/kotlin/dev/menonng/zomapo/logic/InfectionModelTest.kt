@@ -31,31 +31,31 @@ class InfectionModelTest {
     }
 
     @Test
-    @DisplayName("국가 열기 예시 - 활동 국민 2명이 72시간에 160마리")
+    @DisplayName("국가 열기 예시 - 활동 국민 2명이 72시간에 기본 좀비 스코어 256")
     fun case03() {
-        val h = model.heat(NationActivity(effectiveKills = 160, activeMembers = 2, groupHours = 0.0))
+        val h = model.heat(NationActivity(baseScore = 256.0, activeMembers = 2, groupHours = 0.0))
         assertEquals(ln(3.0), h, 1e-9)
-        assertEquals(2.0, model.config.heatK * h, 0.03)
+        assertEquals(1.92, model.config.heatK * h, 0.01)
     }
 
     @Test
     @DisplayName("활동 국민이 0명이어도 나누기 오류가 없다")
     fun case04() {
-        assertEquals(ln(1.0 + 10.0 / 40.0), model.heat(NationActivity(10, 0, 0.0)), 1e-9)
+        assertEquals(ln(1.0 + 10.0 / 64.0), model.heat(NationActivity(10.0, 0, 0.0)), 1e-9)
     }
 
     @Test
     @DisplayName("단체 활동 정화는 1에서 멈추고 이벤트 정화는 더해진다")
     fun case05() {
-        assertEquals(1.0, model.purify(NationActivity(0, 1, 1000.0)), 1e-9)
-        assertEquals(0.18 * 5 + 0.3, model.purify(NationActivity(0, 1, 25.0), eventPurify = 0.3), 1e-9)
+        assertEquals(1.0, model.purify(NationActivity(0.0, 1, 1000.0)), 1e-9)
+        assertEquals(0.18 * 5 + 0.3, model.purify(NationActivity(0.0, 1, 25.0), eventPurify = 0.3), 1e-9)
     }
 
     @Test
     @DisplayName("영토 레벨은 0과 5 사이로 잘린다")
     fun case06() {
-        assertEquals(5.0, model.territoryLevel(4.0, NationActivity(100_000, 1, 0.0)), eps)
-        assertEquals(0.0, model.territoryLevel(0.0, NationActivity(0, 1, 100.0), eventPurify = 2.0), eps)
+        assertEquals(5.0, model.territoryLevel(4.0, NationActivity(100_000.0, 1, 0.0)), eps)
+        assertEquals(0.0, model.territoryLevel(0.0, NationActivity(0.0, 1, 100.0), eventPurify = 2.0), eps)
     }
 
     @Test

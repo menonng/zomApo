@@ -14,8 +14,8 @@ data class InfectionConfig(
     val maxLevel: Double = 5.0,
     val rampAmplitude: Double = 2.0,
     val rampTauDays: Double = 10.0,
-    val heatK: Double = 1.8,
-    val heatDivisor: Double = 40.0,
+    val heatK: Double = 1.75,          // 20명/활성 10명에서 1/29 평균 영토 레벨 3.0 (tools/sim/heat-compare.md)
+    val heatDivisor: Double = 64.0,    // 처치 수 40 × 처치당 평균 기본 점수 약 1.6
     val purifyCoefficient: Double = 0.18,
     val purifyCap: Double = 1.0,
     val wildernessBonus: Double = 0.3,
@@ -25,9 +25,12 @@ data class InfectionConfig(
     val endFixed: Double = 3.0,       // 엔드 = 3 고정(셜커·엔더맨 좀비화). 떼·낮 스폰은 오버월드만
 )
 
-/** 한 국가의 최근 72시간 활동. */
+/**
+ * 한 국가의 최근 72시간 활동.
+ * [baseScore] = 국민 전원이 72시간 동안 얻은 기본 좀비 스코어 합(농장 감쇠 적용, 레벨 배율 제외: ZombieScore.forHeat).
+ */
 data class NationActivity(
-    val effectiveKills: Int,
+    val baseScore: Double,
     val activeMembers: Int,
     val groupHours: Double,
 )
@@ -44,9 +47,9 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
         return max(0.0, raw - permanentReduction - temporaryReduction)
     }
 
-    /** 국가 열기 H = ln(1 + K3 / max(1, N3) / divisor). */
+    /** 국가 열기 H = ln(1 + S3 / max(1, N3) / divisor). S3 = 72시간 국가 기본 좀비 스코어, N3 = 활동 국민 수. */
     fun heat(activity: NationActivity): Double {
-        val perActive = activity.effectiveKills.toDouble() / max(1, activity.activeMembers)
+        val perActive = activity.baseScore / max(1, activity.activeMembers)
         return ln(1.0 + max(0.0, perActive) / config.heatDivisor)
     }
 
