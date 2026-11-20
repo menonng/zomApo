@@ -393,4 +393,11 @@ monun 의 server-script / minecraft-server-launcher 방식을 따른다([monun.m
 | 모드 대 플러그인, Paper 성능 | `performance.md` 6-1 | 설계 | |
 | 전용 서버 관리 프로그램, 국가 모드 저장소 별도 브랜치 | simpleNationWar `server-panel` | **구현** | Kotlin 데스크톱 창 |
 | 문서 통합(목차), 상세는 별도 | 두 저장소 README | 완료 | |
+| 알레르기 단계 0 = 효과 없음 | '감염 레벨' 2절 | 설계·로직 | 단계 n(1~4) 에서 −(10+5n)%, ÷(1.3+0.1n) |
+| 블록 밝기 4 이하에서도 1/4 로 스폰 | '감염 레벨' 2절 | 설계·로직 | 0: ×1, 1~4: ×1/4, 5 이상 없음 |
+| 관리 프로그램은 Paper 콘솔 같은 CLI + 편의 기능 | simpleNationWar `server-panel` | 구현 | |
+| 스타포스: 기능 추가 자체에 대한 거부감 | [decisions.md](decisions.md) 8-8 | 결정 | 시즌 1 제외 |
+| 리소스팩 필수, 로딩 최적화, 로딩 중 사망 | 기술 구조 '좀비화 외형' 0-3·0-4 | 설계 | 설정 단계 적용 + 바닐라 로딩 무적 + 접속 보호 10초 |
+| 이 서버 전용 최적화 모드 기대치(개발은 맨 마지막) | `performance.md` 11절 | 실측·추정 | 틱 약 −21% |
+| 생존일지 → '오늘의 서버 기록', 175% 클로드 문체 | simpleNationWar `diary.md` 0절 | 로직 | |
 
