@@ -80,9 +80,10 @@
 
 | 항목 | 값 | 근거 |
 |---|---|---|
+| 서버 PC | Ryzen 5 9600X · DDR5 32GB · Windows 11, 같은 PC 에서 클라이언트도 실행 | [performance.md](performance.md) 9절 |
 | CPU | **단일 코어 성능이 핵심.** 보급형 데스크톱(Ryzen 5 3600·i5-10400 급) 이상이면 시즌 내내 여유, 최근 데스크톱급이면 최악 순간도 50ms 안. 코어는 4개 이상(C2ME·BlueMap·GC 가 나눠 씀) | 렉은 떨어진 무리 수에 비례(무리당 틱 약 4.7ms, 측정 컨테이너). [performance.md](performance.md) 3-1 |
-| 메모리 | **서버 힙 6GB**, 기계 전체 16GB(서버 전용). 같은 PC 에서 직접 플레이도 하면 32GB 권장, 16GB 면 힙 4~5GB | 실사용 힙 약 2.2GB(실측 + 보정) + G1 여유. [performance.md](performance.md) 4절 |
-| 저장 장치 | NVMe 40 GB 이상 | 사전 생성 월드 + BlueMap 타일 + 백업 |
+| 메모리 | **서버 힙 8GB + 클라이언트 8GB** (32GB). 서버 전용 기계라면 16GB 로 충분 | 실사용 힙 약 2.2GB(실측 + 보정) + G1 여유. [performance.md](performance.md) 4절 |
+| 저장 장치 | NVMe 50GB 이상 | 월드 약 3GB(25만 청크) + BlueMap 약 10GB + 월드 백업 7일 20GB 이상 ([performance.md](performance.md) 10절) |
 | 백업 | 매일 자동, 7일 보관 | 망자·국고 같은 상태가 월드에 있다 |
 
 ### 7-1. 실행 스크립트
@@ -94,6 +95,6 @@ monun 의 server-script / minecraft-server-launcher 방식을 따른다([monun.m
 | 재시작 루프 | 스크립트가 서버를 루프로 띄운다. 게임 안에서 재시작을 요청하면 표식 파일을 남기고, 종료 후 표식이 있으면 다시 시작 |
 | 정기 재시작 | 05:50 경고 → 06:00 재시작 (감염 레벨 재계산 시각과 맞춤) |
 | 종료 후 백업 | 서버가 꺼진 직후 월드·`config`·봇 DB 를 `tar` 로 압축, 7일 보관 |
-| JVM 플래그 | `-Xms6G -Xmx6G` + Aikar 표준 G1 세트(`tools/perf/bench.py` 와 같음). GC 정지가 체감되면 Java 25 세대별 ZGC 를 spark 로 비교 |
+| JVM 플래그 | `-Xms8G -Xmx8G` + Aikar 표준 G1 세트 + 같은 PC 용 GC 스레드 제한. Windows `start.bat` 은 [performance.md](performance.md) 9-3. GC 정지가 체감되면 Java 25 세대별 ZGC 를 spark 로 비교 |
 | 모드 업데이트 | 시작 전에 우리 모드 3종의 최신 GitHub 릴리스 jar 를 받아 교체(선택) |
 | 원격 디버그 | 테스트 서버에서만 jdwp 포트 |

@@ -150,6 +150,8 @@ def main():
     ap.add_argument("--cost", type=str, default="", help="비용 모델 JSON 파일(실측 적합 결과)")
     ap.add_argument("--p-base", type=float, default=P_BASE, help="접속 중 자국 기지에 있을 확률")
     ap.add_argument("--p-pair", type=float, default=P_PAIR, help="밖에 나간 사람이 같은 국가 접속자와 같이 다닐 확률")
+    ap.add_argument("--cpu-factor", type=float, default=0.0, help="서버 PC 의 CPU 배율(측정 컨테이너 = 1.0). 주면 5·6절 출력")
+    ap.add_argument("--cpu-label", type=str, default="지정 PC")
     args = ap.parse_args()
     globals()["P_BASE"], globals()["P_PAIR"] = args.p_base, args.p_pair
     if args.cost:
@@ -221,6 +223,46 @@ def main():
         over_fa = sum(1 for x in fa if x > 50) / len(fa)
         over_fo = sum(1 for x in fo if x > 50) / len(fo)
         print(f"| {k} | {pct(fa, 0.99):.1f} | {pct(fo, 0.99):.1f} | {over_fa:.2%} | {over_fa - over_fo:.2%}p |")
+
+    if args.cpu_factor:
+        f = args.cpu_factor
+        print(f"\n## 5. {args.cpu_label} 기준 (CPU 배율 {f}, 실제 플레이 보정 ×{REAL_FACTOR})\n")
+        print("| 전체/활성 | 구성 | 틱 중앙값 p99 | 틱 95백분위 p99 | 최악 순간 | 느려지는 시간 | 실사용 힙 최대(봇) |")
+        print("|---|---|---|---|---|---|---|")
+        for key in [(20, 10), (23, 12)]:
+            allS = store[key]
+            for k, c in COST.items():
+                ms, ps, hs = [], [], []
+                for o, g in allS:
+                    if o == 0:
+                        continue
+                    h, m = load(g, c)
+                    ms.append(m * REAL_FACTOR / f)
+                    ps.append(load(g, c, "p95")[1] * REAL_FACTOR / f)
+                    hs.append(h)
+                slow = sum(1 for x in ps if x > 50) / len(ps)
+                print(f"| {key[0]}/{key[1]} | {k} | {pct(ms, 0.99):.1f} | {pct(ps, 0.99):.1f} | {max(ps):.1f} | {slow:.2%} | {max(hs):.0f}MB |")
+
+        print(f"\n## 6. 동시 접속을 정해 놓고 (스트레스, {args.cpu_label}, 최적화 모드)\n")
+        print("접속자를 세 국가에 고르게 나누고 무리 모델을 그대로 적용. 5,000번 표본.\n")
+        print("틱 중앙값이 50ms 를 넘으면 TPS 자체가 20 아래로 내려가고, 95백분위만 넘으면 가끔 끊기는 정도다. 시야 8·시뮬 6 은 실측 −16% 를 적용.\n")
+        print("| 동시 접속 | 떨어진 무리 중앙/상위 5% | 틱 중앙값 (보통/붐빌 때) | 틱 95백분위 (보통/붐빌 때) | TPS 20 유지 확률 | 가끔 끊김(95% > 50ms) | 시야8·시뮬6 일 때 95백분위 붐빌 때 | 실사용 힙 상위 5%(봇) |")
+        print("|---|---|---|---|---|---|---|---|")
+        rng = random.Random(args.seed)
+        c = COST["opt"]
+        for k in [10, 12, 15, 18, 20, 23]:
+            areas, ms, ps, hs = [], [], [], []
+            for _ in range(5000):
+                players = [("core", False, rng.randrange(3)) for _ in range(k)]
+                g = clusters(rng, list(range(k)), players)
+                areas.append(len(g))
+                ms.append(load(g, c)[1] * REAL_FACTOR / f)
+                ps.append(load(g, c, "p95")[1] * REAL_FACTOR / f)
+                hs.append(load(g, c)[0])
+            tps_ok = sum(1 for x in ms if x <= 50) / len(ms)
+            hitch = sum(1 for x in ps if x > 50) / len(ps)
+            print(f"| {k}명 | {pct(areas, 0.5):.0f} / {pct(areas, 0.95):.0f} | {pct(ms, 0.5):.0f} / {pct(ms, 0.95):.0f}ms | {pct(ps, 0.5):.0f} / {pct(ps, 0.95):.0f}ms | "
+                  f"{tps_ok:.0%} | {hitch:.0%} | {pct(ps, 0.95) * 0.84:.0f}ms | {pct(hs, 0.95):.0f}MB |")
 
 if __name__ == "__main__":
     main()
