@@ -43,17 +43,17 @@ class SpawnRulesTest {
     }
 
     @Test
-    @DisplayName("태양광 알레르기: 레벨 0 → 4단계(−25%, ÷1.6), 레벨 3 → 1단계(−10%, ÷1.3), 레벨 4 이상 없음")
+    @DisplayName("태양광 알레르기: 단계 n = 4 − 레벨, 단계 0 은 효과 없음. 레벨 0 → 4단계(−30%, ÷1.7), 레벨 3 → 1단계(−15%, ÷1.4)")
     fun case03() {
         val a0 = LevelRules.sunAllergy(0)!!
-        assertEquals(4, a0.stage); assertEquals(0.25, a0.healthCut, eps); assertEquals(1.6, a0.followRangeDivisor, eps)
+        assertEquals(4, a0.stage); assertEquals(0.30, a0.healthCut, eps); assertEquals(1.7, a0.followRangeDivisor, eps)
         val a2 = LevelRules.sunAllergy(2)!!
-        assertEquals(2, a2.stage); assertEquals(0.15, a2.speedCut, eps); assertEquals(1.4, a2.followRangeDivisor, eps)
+        assertEquals(2, a2.stage); assertEquals(0.20, a2.speedCut, eps); assertEquals(1.5, a2.followRangeDivisor, eps)
         val a3 = LevelRules.sunAllergy(3)!!
-        assertEquals(1, a3.stage); assertEquals(0.10, a3.healthCut, eps); assertEquals(1.3, a3.followRangeDivisor, eps)
+        assertEquals(1, a3.stage); assertEquals(0.15, a3.healthCut, eps); assertEquals(1.4, a3.followRangeDivisor, eps)
         assertNull(LevelRules.sunAllergy(4))
         assertNull(LevelRules.sunAllergy(5))
-        assertEquals(1.0 / 1.6 - 1.0, a0.followRangeModifier, eps)
+        assertEquals(1.0 / 1.7 - 1.0, a0.followRangeModifier, eps)
         assertEquals(15.0, LevelRules.rescaleHealth(20.0, 20.0, 15.0), eps)
         assertEquals(20.0, LevelRules.rescaleHealth(15.0, 15.0, 20.0), eps)
         assertEquals(10.0, LevelRules.rescaleHealth(7.5, 15.0, 20.0), eps)
@@ -128,14 +128,14 @@ class SpawnRulesTest {
     }
 
     @Test
-    @DisplayName("조명 계수: 0~3 그대로, 4~11 1/4, 12 이상 없음")
+    @DisplayName("조명 계수(블록 빛): 0 그대로, 1~4 1/4, 5 이상 없음")
     fun case09() {
         assertEquals(1.0, LevelRules.lightFactor(0), eps)
-        assertEquals(1.0, LevelRules.lightFactor(3), eps)
+        assertEquals(0.25, LevelRules.lightFactor(1), eps)
         assertEquals(0.25, LevelRules.lightFactor(4), eps)
-        assertEquals(0.25, LevelRules.lightFactor(11), eps)
-        assertEquals(0.0, LevelRules.lightFactor(12), eps)
-        assertEquals(1.7 * 0.25, LevelRules.indoorZombieRate(2, 8), eps)
+        assertEquals(0.0, LevelRules.lightFactor(5), eps)
+        assertEquals(0.0, LevelRules.lightFactor(14), eps)
+        assertEquals(1.7 * 0.25, LevelRules.indoorZombieRate(2, 3), eps)
     }
 
     @Test

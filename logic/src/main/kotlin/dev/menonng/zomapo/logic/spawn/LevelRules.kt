@@ -24,19 +24,18 @@ object LevelRules {
     const val DAY_SPAWN_FROM = 2
 
     /**
-     * 조명 계수. zomApo 가 더하는 좀비 스폰(실내 밝은 곳, 낮 지상)에 곱한다.
-     * 블록 빛 0~3: 1.0 (어두움), 4~11: 0.25 (요구: 실내 밝기 4 이상이면 1/4), 12 이상: 0 (제안: 강한 조명은 안전 구역).
-     * 바닐라 스폰(블록 빛 0)은 이 계수와 무관하게 그대로 돈다.
+     * 조명 계수(블록 빛 기준). 블록 빛 0: 1.0, 1~4: 0.25 (요구: 블록 밝기 4 이하에서도 1/4 로 스폰), 5 이상: 0.
+     * 바닐라 몬스터는 블록 빛 0 에서만 나오므로, 1~4 구역은 zomApo 스포너가 좀비만 채운다.
      */
     fun lightFactor(blockLight: Int): Double = when {
-        blockLight <= 3 -> 1.0
+        blockLight <= 0 -> 1.0
         blockLight <= MAX_SPAWN_BLOCK_LIGHT -> 0.25
         else -> 0.0
     }
 
-    const val MAX_SPAWN_BLOCK_LIGHT = 11
+    const val MAX_SPAWN_BLOCK_LIGHT = 4
 
-    /** 실내(하늘이 안 보이는 곳) 좀비 스폰률: 밤 배율 × 조명 계수. 낮·밤 무관. */
+    /** 실내(하늘이 안 보이는 곳) 좀비 스폰률: 밤 배율 × 조명 계수(블록 빛). 낮·밤 무관. */
     fun indoorZombieRate(level: Int, blockLight: Int): Double = nightZombieRate(level) * lightFactor(blockLight)
 
     /** 레벨 2 이상에서 태어난 좀비는 햇빛에 타지 않는다. */
@@ -46,14 +45,15 @@ object LevelRules {
     fun baseHealthMultiplier(spawnLevel: Int): Double = if (spawnLevel >= 4) 1.5 else 1.0
 
     /**
-     * 태양광 알레르기(낮 동안 모든 좀비). 단계 = 4 − 스폰 레벨 (0 이하면 없음).
-     * 단계 k 의 효과는 n = k − 1 로 두고 체력·이속 −(10 + 5n)%, 탐지 거리 ÷(1.3 + 0.1n).
+     * 태양광 알레르기(낮 동안 모든 좀비). 단계 n = 4 − 스폰 레벨. **단계 0 은 효과 없음.**
+     * 단계 n(1~4)의 효과: 체력·이속 −(10 + 5n)%, 탐지 거리 ÷(1.3 + 0.1n).
+     * 단계 1 −15% ÷1.4, 2 −20% ÷1.5, 3 −25% ÷1.6, 4 −30% ÷1.7.
      */
     fun sunAllergy(spawnLevel: Int): SunAllergy? {
-        // 상태 효과 zomapo:sun_allergy 로 건다. 효과 증폭값(amplifier) = 단계 − 1 = n.
-        val k = 4 - spawnLevel.coerceIn(0, MAX_LEVEL)
-        if (k <= 0) return null
-        val n = k - 1
+        // 상태 효과 zomapo:sun_allergy 로 건다. 효과 증폭값(amplifier) = 단계 − 1 (마크 표기상 단계 n = 효과 레벨 n).
+        val n = 4 - spawnLevel.coerceIn(0, MAX_LEVEL)
+        if (n <= 0) return null
+        val k = n
         val cut = 0.10 + 0.05 * n
         return SunAllergy(stage = k, healthCut = cut, speedCut = cut, followRangeDivisor = 1.3 + 0.1 * n)
     }
