@@ -148,7 +148,10 @@ def main():
     ap.add_argument("--runs", type=int, default=300)
     ap.add_argument("--seed", type=int, default=20270116)
     ap.add_argument("--cost", type=str, default="", help="비용 모델 JSON 파일(실측 적합 결과)")
+    ap.add_argument("--p-base", type=float, default=P_BASE, help="접속 중 자국 기지에 있을 확률")
+    ap.add_argument("--p-pair", type=float, default=P_PAIR, help="밖에 나간 사람이 같은 국가 접속자와 같이 다닐 확률")
     args = ap.parse_args()
+    globals()["P_BASE"], globals()["P_PAIR"] = args.p_base, args.p_pair
     if args.cost:
         import json
         with open(args.cost) as f:

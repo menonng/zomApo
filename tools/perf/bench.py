@@ -328,7 +328,7 @@ def run(args):
                 break
             time.sleep(2)
         txt = open(conf).read().replace("accept-download: false", "accept-download: true")
-        txt = re.sub(r"#?\s*render-thread-count: .*", "render-thread-count: 2", txt)
+        txt = re.sub(r"^#?[ \t]*render-thread-count:.*$", "render-thread-count: 2", txt, flags=re.M)
         open(conf, "w").write(txt)
         srv.cmd("bluemap reload")
         time.sleep(30)

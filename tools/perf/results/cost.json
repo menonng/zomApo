@@ -1,0 +1,24 @@
+{
+ "base": {
+  "heap_base": 459,
+  "heap_area": 104.6,
+  "heap_player": 52.3,
+  "mspt_base": 0.0,
+  "mspt_area": 5.95,
+  "mspt_player": 0.0,
+  "p95_base": 0.87,
+  "p95_area": 7.6,
+  "p95_player": 0.0
+ },
+ "opt": {
+  "heap_base": 368,
+  "heap_area": 90.8,
+  "heap_player": 30.2,
+  "mspt_base": 0.0,
+  "mspt_area": 4.73,
+  "mspt_player": 0.0,
+  "p95_base": 1.63,
+  "p95_area": 5.55,
+  "p95_player": 0.0
+ }
+}

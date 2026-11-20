@@ -43,6 +43,7 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 | [docs/server/simulation.md](docs/server/simulation.md) | 인원·활성 인구별 플레이 양상과 재미도 시뮬레이션 |
 | [docs/server/roadmap.md](docs/server/roadmap.md) | 개발 일정과 시즌 1 운영 일정 |
 | [docs/server/privacy.md](docs/server/privacy.md) | 개인정보와 데이터: 보관 정책, 외부 노출 지점, 가입 동의 항목 |
+| [docs/server/performance.md](docs/server/performance.md) | 서버 성능 실측: 필요한 RAM·CPU, 최적화 모드 효과, Folia 전환 검토 |
 
 ### zomApo 설계
 | 문서 | 내용 |
@@ -62,3 +63,5 @@ JDK 25 가 필요하다. Gradle 과 마인크래프트·Fabric 파일은 래퍼�
 |---|---|
 | [tools/sim/zomapo_sim.py](tools/sim/zomapo_sim.py) | 플레이 양상 시뮬레이터 (표준 라이브러리만 사용) |
 | [tools/sim/results.md](tools/sim/results.md) | 시뮬레이터 출력 원본 |
+| [tools/sim/load_sim.py](tools/sim/load_sim.py) | 서버 부하 시뮬레이터: 동시 접속·흩어짐 → 힙·틱 시간 ([load-results.md](tools/sim/load-results.md)) |
+| [tools/perf/bench.py](tools/perf/bench.py) | 서버 부하 실측: Carpet 봇으로 틱·힙·GC 측정. 자기 PC 에서도 실행 가능 ([results.md](tools/perf/results.md)) |
