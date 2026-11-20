@@ -32,17 +32,6 @@ class NoiseTest {
         assertEquals(3, Noise.responders(NoiseSource.EXPLOSION, true, ls, 1000, budgetLeft = 3).size)
         assertEquals(64, Noise.radius(NoiseSource.BELL, sneaking = true))
     }
-
-    @Test
-    @DisplayName("비명: 한 번에 4 이상 피해 또는 체력 30% 아래로 처음 떨어질 때, 10초에 한 번")
-    fun case02() {
-        assertTrue(Noise.shouldScream(4f, 20f, 16f, 20f, 1000))
-        assertFalse(Noise.shouldScream(2f, 20f, 18f, 20f, 1000))
-        assertTrue(Noise.shouldScream(2f, 7f, 5f, 20f, 1000))   // 6 아래로 처음
-        assertFalse(Noise.shouldScream(2f, 5f, 3f, 20f, 1000))  // 이미 아래
-        assertFalse(Noise.shouldScream(8f, 20f, 12f, 20f, 100)) // 쿨다운
-        assertFalse(Noise.shouldScream(8f, 5f, 0f, 20f, 1000))  // 죽음
-    }
 }
 
 class WoundsTest {

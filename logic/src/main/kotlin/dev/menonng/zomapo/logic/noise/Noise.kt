@@ -20,8 +20,6 @@ enum class NoiseSource(val radius: Int, val byPlayer: Boolean) {
     EXPLOSION(48, false),
     /** 종(벨). 일부러 좀비를 부르는 도구. */
     BELL(64, false),
-    /** 플레이어의 비명: 한 번에 큰 피해(4 이상)를 받거나 체력이 30% 아래로 처음 떨어질 때. */
-    SCREAM(24, false),
     /** 출혈 중 5초마다 나는 피 냄새. 소리는 아니지만 같은 방식으로 다룬다. */
     BLOOD_SCENT(24, false),
     /** 감염 3단계의 기침(2분마다). */
@@ -47,20 +45,8 @@ object Noise {
     /** 조사는 이 시간 안에 도착하지 못하면 그만둔다(30초). */
     const val INVESTIGATE_TIMEOUT_TICKS = 600L
 
-    /** 비명 조건: 한 번에 받은 피해 [SCREAM_DAMAGE] 이상, 또는 체력이 [SCREAM_HEALTH_FRACTION] 아래로 처음 떨어짐. */
-    const val SCREAM_DAMAGE = 4.0f
-    const val SCREAM_HEALTH_FRACTION = 0.3f
-    /** 비명은 10초에 한 번까지. */
-    const val SCREAM_COOLDOWN_TICKS = 200L
-
     fun radius(source: NoiseSource, sneaking: Boolean): Int =
         if (sneaking && source.byPlayer) source.radius / 2 else source.radius
-
-    fun shouldScream(damage: Float, healthBefore: Float, healthAfter: Float, maxHealth: Float, ticksSinceLastScream: Long): Boolean {
-        if (ticksSinceLastScream < SCREAM_COOLDOWN_TICKS || healthAfter <= 0f) return false
-        val threshold = maxHealth * SCREAM_HEALTH_FRACTION
-        return damage >= SCREAM_DAMAGE || (healthBefore >= threshold && healthAfter < threshold)
-    }
 
     /** 이 소리에 반응할 좀비 id(가까운 순). [budgetLeft] 는 이번 초에 남은 전역 예산. */
     fun responders(
