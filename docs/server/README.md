@@ -317,6 +317,8 @@ zomApo 에서는 바닐라 좀비 계열이므로 변환 대상이 아니라 **�
 
 #### 7-1. 실행 스크립트
 
+**서버 관리 창**: 아래 기능(재시작 루프, 정기 재시작, 종료 후 백업)을 Windows 에서 창 하나로 하는 `snw-panel` 을 simpleNationWar 의 `server-panel` 브랜치에 만들었다. 색 있는 콘솔·자동완성·접속자·TPS·MSPT·시즌 버튼 포함([panel.md](https://github.com/menonng/simpleNationWar/blob/server-panel/docs/panel.md)). 콘솔만 필요하면 Better Fabric Console 모드로도 Paper 수준이 된다.
+
 monun 의 server-script / minecraft-server-launcher 방식을 따른다([monun.md](../reference/monun.md) 9절).
 
 | 기능 | 동작 |
