@@ -11,7 +11,7 @@ import dev.menonng.zomapo.logic.death.DeathPoint
 import dev.menonng.zomapo.logic.death.DeathWatch
 import dev.menonng.zomapo.logic.death.RevenantGuard
 import dev.menonng.zomapo.logic.death.RevenantStash
-import dev.menonng.zomapo.logic.death.StashAction
+import dev.menonng.zomapo.logic.death.RevenantOutcome
 import dev.menonng.zomapo.logic.despawn.MemoryConfig
 import dev.menonng.zomapo.logic.despawn.MemoryReason
 import dev.menonng.zomapo.logic.despawn.RegionMember
@@ -163,33 +163,44 @@ class DeathMarkerAndRevenantTest {
         assertFalse(DeathMarker.keepShowing(DeathDrop.PRESERVED_DROP, 18_000, revenantPending = false))
     }
 
+    private val ow = "minecraft:overworld"
+
     @Test
-    @DisplayName("망자: 빈손이면 안 만들고, 다시 죽으면 합치며 세대가 바뀐 옛 망자는 사라진다")
+    @DisplayName("망자는 움직이지 않는다: 64블록 안이면 그 망자에 합치고, 멀면 따로 (멀리서 죽고 집 근처에서 또 죽어도 안 옮겨짐)")
     fun case02() {
         val s = RevenantStash()
-        assertEquals(StashAction.NOTHING_TO_HOLD, RevenantGuard.onRevenantDeath(s, 0, 0, 0))
-        assertEquals(StashAction.CREATE, RevenantGuard.onRevenantDeath(s, 5, 10, 0))
-        val first = s.generation
-        assertEquals(StashAction.MOVE_AND_MERGE, RevenantGuard.onRevenantDeath(s, 2, 0, 1_000))
-        assertTrue(RevenantGuard.isStale(s, first))
-        assertFalse(RevenantGuard.isStale(s, s.generation))
-        // 빈손으로 또 죽어도 이미 있는 망자는 옮겨지지 않는다
-        val gen = s.generation
-        assertEquals(StashAction.NOTHING_TO_HOLD, RevenantGuard.onRevenantDeath(s, 0, 0, 2_000))
-        assertEquals(gen, s.generation)
+        assertEquals(RevenantOutcome.NothingToHold, RevenantGuard.onRevenantDeath(s, ow, 0, 64, 0, 0, 0, 0))
+        val far = RevenantGuard.onRevenantDeath(s, ow, 3000, 64, 3000, 5, 10, 0) as RevenantOutcome.Created
+        assertNull(far.collapsed)
+        // 집 근처에서 흙 하나 들고 죽음: 먼 망자는 제자리, 새 망자가 따로 생긴다
+        val home = RevenantGuard.onRevenantDeath(s, ow, 10, 64, 10, 1, 0, 1_000) as RevenantOutcome.Created
+        assertEquals(3000, s.entries.first { it.id == far.entry.id }.x)
+        // 집 망자 60블록 안에서 또 죽음: 집 망자에 합침, 위치 그대로
+        val merged = RevenantGuard.onRevenantDeath(s, ow, 50, 70, 40, 2, 0, 2_000) as RevenantOutcome.Merged
+        assertEquals(home.entry.id, merged.entry.id)
+        assertEquals(10, merged.entry.x)
+        // 다른 차원이면 거리와 상관없이 따로
+        assertTrue(RevenantGuard.onRevenantDeath(s, "minecraft:the_nether", 10, 64, 10, 1, 0, 3_000) is RevenantOutcome.Created)
+        assertEquals(3, s.entries.size)
+        // 4번째(멀리): 가장 오래된 망자(먼 곳)가 무너져 보존 드랍
+        val fourth = RevenantGuard.onRevenantDeath(s, ow, -2000, 64, 0, 1, 0, 4_000) as RevenantOutcome.Created
+        assertEquals(far.entry.id, fourth.collapsed?.id)
+        assertTrue(RevenantGuard.isStale(s, far.entry.id))
+        assertFalse(RevenantGuard.isStale(s, home.entry.id))
+        assertEquals(home.entry.id, RevenantGuard.nearest(s, ow, 0, 0)?.id)
     }
 
     @Test
-    @DisplayName("망자 회수 통계: 생긴 지 2분 이상, 10분에 1번까지. 잦은 죽음은 운영자 로그")
+    @DisplayName("망자 회수 통계: 생기거나 합쳐진 지 2분 이상, 10분에 1번까지. 잦은 죽음은 운영자 로그")
     fun case03() {
         val s = RevenantStash()
-        RevenantGuard.onRevenantDeath(s, 1, 0, 0)
-        assertFalse(RevenantGuard.onRecovered(s, 60_000))            // 1분 만에 회수: 안 셈
-        assertTrue(RevenantGuard.isStale(s, s.generation))           // 장부는 비었다
-        RevenantGuard.onRevenantDeath(s, 1, 0, 100_000)
-        assertTrue(RevenantGuard.onRecovered(s, 100_000 + 120_000))  // 2분 뒤: 셈
-        RevenantGuard.onRevenantDeath(s, 1, 0, 300_000)
-        assertFalse(RevenantGuard.onRecovered(s, 300_000 + 130_000)) // 10분 안 두 번째: 안 셈
+        val a = (RevenantGuard.onRevenantDeath(s, ow, 0, 64, 0, 1, 0, 0) as RevenantOutcome.Created).entry
+        assertFalse(RevenantGuard.onRecovered(s, a.id, 60_000))            // 1분 만에 회수: 안 셈
+        assertTrue(RevenantGuard.isStale(s, a.id))                        // 장부에서 빠졌다
+        val b = (RevenantGuard.onRevenantDeath(s, ow, 0, 64, 0, 1, 0, 100_000) as RevenantOutcome.Created).entry
+        assertTrue(RevenantGuard.onRecovered(s, b.id, 100_000 + 120_000))  // 2분 뒤: 셈
+        val c = (RevenantGuard.onRevenantDeath(s, ow, 0, 64, 0, 1, 0, 300_000) as RevenantOutcome.Created).entry
+        assertFalse(RevenantGuard.onRecovered(s, c.id, 300_000 + 130_000)) // 10분 안 두 번째: 안 셈
         val w = DeathWatch()
         val p = UUID(3, 4)
         val flags = (0 until 8).map { w.record(p, it * 60_000L) }
