@@ -26,6 +26,44 @@ enum class NoiseSource(val radius: Int, val byPlayer: Boolean) {
     COUGH(16, false),
 }
 
+/**
+ * 바닐라 진동(게임 이벤트) → 소음 반경. 2026-11-21: '소리가 나는 것'은 따로 목록을 만들지 않고 **바닐라 진동 체계를 그대로 쓴다.**
+ * 스컬크 감지기·워든과 같은 규칙: 웅크리면 발걸음 진동이 없고, 양털 블록이 진동을 막는다. 플레이어가 이미 아는 규칙이라 배우기 쉽다.
+ * 여기 없는 이벤트는 소음이 아니다.
+ */
+object Vibrations {
+    val RADIUS: Map<String, Int> = mapOf(
+        "step" to 4,                 // 걷기(뛰면 ×1.5, 웅크리면 바닐라처럼 진동 없음)
+        "hit_ground" to 4,
+        "splash" to 8, "swim" to 4,
+        "projectile_shoot" to 6, "projectile_land" to 8,
+        "block_destroy" to 8, "block_place" to 6, "block_open" to 6, "block_close" to 6,
+        "block_activate" to 6, "block_deactivate" to 6,
+        "container_open" to 6, "container_close" to 6,
+        "entity_damage" to 12, "entity_action" to 8,
+        "eat" to 3, "drink" to 3,
+        "item_interact_finish" to 4,
+        "prime_fuse" to 16, "explode" to 48,
+        "instrument_play" to 64,     // 염소 뿔
+        "note_block_play" to 24,
+        "shriek" to 64,              // 스컬크 비명체
+        "block_change" to 10,        // 종 울림 포함(종은 따로 64)
+        "lightning_strike" to 64,
+        "elytra_glide" to 6,
+        "teleport" to 10,
+    )
+    const val BELL = 64
+    /** 돌풍구 터짐은 게임 이벤트로는 폭발(48)이지만 소리 크기에 맞춰 따로 둔다(플레이어·브리즈 모두). */
+    const val WIND_CHARGE = 16
+    const val SPRINT_FACTOR = 1.5
+
+    /** 진동 하나의 소음 반경. 웅크리기·양털 가림은 바닐라 판정을 그대로 쓴 뒤 부른다. */
+    fun radius(event: String, sprinting: Boolean = false): Int? {
+        val base = RADIUS[event.removePrefix("minecraft:")] ?: return null
+        return if (event.endsWith("step") && sprinting) (base * SPRINT_FACTOR).toInt() else base
+    }
+}
+
 /** 소리를 들을 수 있는 좀비 하나의 요약. */
 data class Listener(
     val id: Int,

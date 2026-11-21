@@ -82,6 +82,16 @@ class WoundsTest {
     }
 }
 
+class AntidoteTest {
+    @Test
+    @DisplayName("해독제: 양조기(결정 1개로 3병)가 제작대(결정 2개로 1병)보다 효율적")
+    fun case01() {
+        assertTrue(dev.menonng.zomapo.logic.effects.Antidote.crystalsPerAntidote(true) < dev.menonng.zomapo.logic.effects.Antidote.crystalsPerAntidote(false))
+        assertEquals(1.0 / 3.0, dev.menonng.zomapo.logic.effects.Antidote.crystalsPerAntidote(true), 1e-9)
+        assertEquals(2.0, dev.menonng.zomapo.logic.effects.Antidote.crystalsPerAntidote(false), 1e-9)
+    }
+}
+
 class BloodMoonAndAfkTest {
     private val t0 = Instant.parse("2027-01-20T12:00:00Z")
     private val three = mapOf("1국" to 2, "2국" to 2, "3국" to 1)

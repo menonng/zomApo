@@ -88,3 +88,21 @@ object Infection {
     fun infirmaryAvailable(lastUseMillis: Long?, nowMillis: Long): Boolean =
         lastUseMillis == null || nowMillis - lastUseMillis >= INFIRMARY_COOLDOWN_MILLIS
 }
+
+/**
+ * 해독제 조합법(2026-11-21). 아이템은 바닐라 물약에 custom_model_data "zomapo:antidote" 를 붙인 것.
+ * 양조기가 더 효율적이다: 결정 1개로 3병(결정 1/3개/병) 대 제작대 결정 2개/병.
+ */
+object Antidote {
+    const val MODEL = "zomapo:antidote"
+    const val CRYSTAL_MODEL = "zomapo:virus_crystal"
+    /** 제작대(모양 없음): 유리병 + 바이러스 결정 2 + 황금 당근 → 해독제 1 */
+    const val CRAFT_CRYSTALS = 2
+    const val CRAFT_OUTPUT = 1
+    /** 양조기: 어색한 물약 + 바이러스 결정 1 → 해독제(병마다). 한 번에 3병 */
+    const val BREW_CRYSTALS = 1
+    const val BREW_OUTPUT = 3
+
+    fun crystalsPerAntidote(brewing: Boolean): Double =
+        if (brewing) BREW_CRYSTALS.toDouble() / BREW_OUTPUT else CRAFT_CRYSTALS.toDouble() / CRAFT_OUTPUT
+}

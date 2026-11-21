@@ -4,7 +4,8 @@ package dev.menonng.zomapo.logic.spawn
  * 어떤 몹이 어느 레벨부터 좀비화되는가, 스폰 출처별로 바꿔도 되는가. docs/design/zombies.md '몹 좀비화' 1~2절.
  *
  * 좀비화 = 원종 엔티티를 그대로 두고 좀비 특성·외형·루트테이블(원종 + 좀비, 각각 따로 굴림)을 붙이는 것.
- * 바닐라에 좀비 짝이 있는 몹(호글린, 피글린)은 그 바닐라 좀비로 바꾼다.
+ * 2026-11-21 개정: 피글린·호글린은 좀비화하지 않는다(주민처럼). 대신 좀비화 몹을 경계하고, 좀비화 몹은 그들을 공격한다(PiglinWariness).
+ * 파괴수(습격)와 엘더 가디언(해저 신전)을 넣는다.
  */
 enum class Family(val threshold: Int, val label: String) {
     SKELETON(1, "스켈레톤 계열"),
@@ -20,9 +21,10 @@ enum class Family(val threshold: Int, val label: String) {
     BREEZE(3, "브리즈"),
     SHULKER(3, "셜커"),
     NETHER(3, "네더 몹"),           // 가스트·블레이즈·마그마 큐브·위더 스켈레톤
-    PIGLIN(3, "피글린 → 좀비화 피글린"),
-    PIGLIN_BRUTE(3, "피글린 브루트 → 부패 브루트(고유)"),
-    HOGLIN(3, "호글린 → 조글린"),
+    PIGLIN_BRUTE(3, "피글린 브루트 → 진홍 브루트(고유)"),
+    RAVAGER(3, "파괴수(좀비화 습격)"),
+    ELDER_GUARDIAN(3, "엘더 가디언"),
+    WARY(Int.MAX_VALUE, "좀비화하지 않고 좀비화 몹을 경계(피글린·호글린)"),
     ZOMBIE(0, "이미 좀비"),          // 변환 없음, 레벨 강화만
     EXCLUDED(Int.MAX_VALUE, "제외"),
 }
@@ -35,7 +37,8 @@ enum class SpawnOrigin {
     STRUCTURE_PLACED, // 구조물과 함께 생성(엔드 시티 셜커, 저택 우민, 엘더 가디언)
     SPAWNER,          // 몬스터 스포너 블록
     TRIAL_SPAWNER,    // 시련 스포너
-    RAID,             // 습격
+    RAID,             // 습격(습격이 일어난 청크 레벨이 차면 좀비화 습격)
+    EVENT,            // zomApo 이벤트(좀비 떼·블러드문·둥지): 이벤트 레벨로 좀비화
     SUMMONED,         // 다른 몹이 부름(소환사 벡스, 좀비 증원 등)
     SPLIT,            // 슬라임·마그마 큐브 분열
     OTHER,            // 알, 명령어, 번식, 바닐라 변환(주민 → 좀비 주민) 등
@@ -57,14 +60,14 @@ object Zombification {
         put("breeze", Family.BREEZE)
         put("shulker", Family.SHULKER)
         listOf("ghast", "blaze", "magma_cube", "wither_skeleton").forEach { put(it, Family.NETHER) }
-        put("piglin", Family.PIGLIN)
         put("piglin_brute", Family.PIGLIN_BRUTE)
-        put("hoglin", Family.HOGLIN)
+        put("ravager", Family.RAVAGER)
+        put("elder_guardian", Family.ELDER_GUARDIAN)
+        listOf("piglin", "hoglin").forEach { put(it, Family.WARY) }
         listOf("zombie", "husk", "drowned", "zombie_villager", "zombified_piglin", "zoglin", "zombie_horse",
             "camel_husk", "zombie_nautilus", "frostbite").forEach { put(it, Family.ZOMBIE) }
         // 제외: 보스·미니보스·워든, 습격·소환 전용, 비공격 몹(유황 큐브는 비공격 몹으로 확인)
-        listOf("ender_dragon", "wither", "elder_guardian", "warden", "ravager", "vex",
-            "sulfur_cube", "strider").forEach { put(it, Family.EXCLUDED) }
+        listOf("ender_dragon", "wither", "warden", "vex", "sulfur_cube", "strider").forEach { put(it, Family.EXCLUDED) }
     }
 
     /**
@@ -78,11 +81,17 @@ object Zombification {
         Family.BREEZE to setOf(SpawnOrigin.TRIAL_SPAWNER),
         Family.SHULKER to setOf(SpawnOrigin.STRUCTURE_PLACED),
         Family.PIGLIN_BRUTE to setOf(SpawnOrigin.STRUCTURE_PLACED),   // 보루에서만 생성
+        Family.ELDER_GUARDIAN to setOf(SpawnOrigin.STRUCTURE_PLACED), // 해저 신전에 생성
     )
     private val EXCEPTION_IDS: Map<String, Set<SpawnOrigin>> = mapOf(
         "blaze" to setOf(SpawnOrigin.STRUCTURE_LIST),
         "wither_skeleton" to setOf(SpawnOrigin.STRUCTURE_LIST),
+        "cave_spider" to setOf(SpawnOrigin.SPAWNER),   // 동굴 거미는 폐광 스포너에서만 나온다
     )
+
+    /** 습격에 끼는 몹. 습격이 일어난 청크가 Lv3 이상이면 좀비화 습격. */
+    private val RAIDERS = setOf("pillager", "vindicator", "evoker", "illusioner", "witch", "ravager")
+    const val ZOMBIFIED_RAID_LEVEL = 3
 
     fun family(entityId: String): Family = FAMILY[entityId.removePrefix("minecraft:")] ?: Family.EXCLUDED
 
@@ -96,25 +105,19 @@ object Zombification {
         if (source == SpawnOrigin.SPLIT) return parentZombified
         val id = entityId.removePrefix("minecraft:")
         val fam = family(id)
-        if (fam == Family.ZOMBIE || fam == Family.EXCLUDED) return false
+        if (fam == Family.ZOMBIE || fam == Family.EXCLUDED || fam == Family.WARY) return false
+        if (source == SpawnOrigin.RAID) return id in RAIDERS && level >= ZOMBIFIED_RAID_LEVEL
         if (level < fam.threshold) return false
         return when (source) {
-            SpawnOrigin.NATURAL, SpawnOrigin.PATROL -> true
-            SpawnOrigin.STRUCTURE_LIST, SpawnOrigin.STRUCTURE_PLACED, SpawnOrigin.TRIAL_SPAWNER ->
+            SpawnOrigin.NATURAL, SpawnOrigin.PATROL -> fam != Family.RAVAGER
+            SpawnOrigin.EVENT -> true
+            SpawnOrigin.STRUCTURE_LIST, SpawnOrigin.STRUCTURE_PLACED, SpawnOrigin.TRIAL_SPAWNER, SpawnOrigin.SPAWNER ->
                 source in (STRUCTURE_EXCEPTION[fam] ?: emptySet()) || source in (EXCEPTION_IDS[id] ?: emptySet())
-            SpawnOrigin.SPAWNER, SpawnOrigin.RAID, SpawnOrigin.SUMMONED, SpawnOrigin.OTHER -> false
-            SpawnOrigin.SPLIT -> parentZombified
+            SpawnOrigin.SUMMONED, SpawnOrigin.OTHER -> false
+            SpawnOrigin.RAID, SpawnOrigin.SPLIT -> parentZombified
         }
     }
 
-    /** 바닐라에 좀비 짝이 있어 엔티티 자체를 바꾸는 경우. */
-    val VANILLA_COUNTERPART: Map<String, String> = mapOf(
-        "hoglin" to "zoglin",
-        "piglin" to "zombified_piglin",
-    )
-
-    /** 피글린은 물물교환을 지키려고 좀비화 확률을 50% 로 묶는다. */
-    fun counterpartChance(entityId: String): Double = if (entityId.removePrefix("minecraft:") == "piglin") 0.5 else 1.0
 
     /**
      * 루트: 원종 테이블과 좀비 테이블을 같은 컨텍스트로 각각 따로 굴려 둘 다 떨군다.

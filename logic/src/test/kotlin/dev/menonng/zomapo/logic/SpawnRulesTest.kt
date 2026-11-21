@@ -74,7 +74,10 @@ class SpawnRulesTest {
         assertTrue(Zombification.shouldZombify("pillager", 3, SpawnOrigin.PATROL))
         assertFalse(Zombification.shouldZombify("zombie", 5, n))           // 이미 좀비
         assertFalse(Zombification.shouldZombify("warden", 5, n))           // 제외
-        assertFalse(Zombification.shouldZombify("elder_guardian", 5, SpawnOrigin.STRUCTURE_PLACED))
+        assertTrue(Zombification.shouldZombify("elder_guardian", 3, SpawnOrigin.STRUCTURE_PLACED))   // 2026-11-21 추가
+        assertFalse(Zombification.shouldZombify("piglin", 5, n))            // 피글린·호글린은 좀비화하지 않는다
+        assertFalse(Zombification.shouldZombify("hoglin", 5, n))
+        assertEquals(Family.WARY, Zombification.family("piglin"))
         assertEquals(Family.EXCLUDED, Zombification.family("some_new_mob"))
         assertFalse(Zombification.isKnown("some_new_mob"))
     }
@@ -86,7 +89,12 @@ class SpawnRulesTest {
         assertFalse(Zombification.shouldZombify("skeleton", 5, SpawnOrigin.SPAWNER))
         assertFalse(Zombification.shouldZombify("vindicator", 5, SpawnOrigin.STRUCTURE_PLACED))
         assertFalse(Zombification.shouldZombify("pillager", 5, SpawnOrigin.STRUCTURE_LIST))   // 전초기지
-        assertFalse(Zombification.shouldZombify("pillager", 5, SpawnOrigin.RAID))
+        assertFalse(Zombification.shouldZombify("pillager", 2, SpawnOrigin.RAID))             // Lv2 습격은 바닐라
+        assertTrue(Zombification.shouldZombify("pillager", 3, SpawnOrigin.RAID))              // Lv3 이상이면 좀비화 습격
+        assertTrue(Zombification.shouldZombify("ravager", 3, SpawnOrigin.RAID))
+        assertFalse(Zombification.shouldZombify("ravager", 5, SpawnOrigin.NATURAL))
+        assertTrue(Zombification.shouldZombify("cave_spider", 3, SpawnOrigin.SPAWNER))         // 폐광 스포너 예외
+        assertTrue(Zombification.shouldZombify("creeper", 2, SpawnOrigin.EVENT))
         assertFalse(Zombification.shouldZombify("skeleton", 5, SpawnOrigin.TRIAL_SPAWNER))
         assertTrue(Zombification.shouldZombify("guardian", 3, SpawnOrigin.STRUCTURE_LIST))
         assertFalse(Zombification.shouldZombify("guardian", 2, SpawnOrigin.STRUCTURE_LIST))
@@ -106,8 +114,6 @@ class SpawnRulesTest {
     fun case06() {
         assertEquals(listOf("minecraft:entities/creeper", "minecraft:entities/zombie"), Zombification.lootTables("creeper", true))
         assertEquals(listOf("minecraft:entities/creeper"), Zombification.lootTables("minecraft:creeper", false))
-        assertEquals("zoglin", Zombification.VANILLA_COUNTERPART["hoglin"])
-        assertEquals(0.5, Zombification.counterpartChance("piglin"), eps)
     }
 
     @Test

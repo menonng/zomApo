@@ -28,16 +28,17 @@ class VariantsTest {
     @Test
     @DisplayName("해금 레벨 전에는 가중치 0, Lv5 에서는 표의 값")
     fun case02() {
-        assertEquals(0.0, VariantTable.weight(Variant.BRUTE, 3.9))
-        assertTrue(VariantTable.weight(Variant.BRUTE, 4.0) > 0.0)
+        assertEquals(0.0, VariantTable.weight(Variant.TANK, 3.9))
+        assertTrue(VariantTable.weight(Variant.TANK, 4.0) > 0.0)
         for (v in Variant.entries) assertEquals(v.weightAtMax.toDouble(), VariantTable.weight(v, 5.0), 1e-9)
     }
 
     @Test
-    @DisplayName("알파 금지 옵션")
+    @DisplayName("러너·탱커는 크기만 조금 다르고, 토사자·팽창체는 없다")
     fun case03() {
-        val r = Random(7)
-        repeat(2000) { assertTrue(VariantTable.pick(5.0, r, allowAlpha = false) != Variant.ALPHA) }
+        assertEquals(0.92, Variant.RUNNER.scale, 1e-9)
+        assertEquals(1.15, Variant.TANK.scale, 1e-9)
+        assertTrue(Variant.entries.none { it.name in setOf("SPITTER", "BLOATER", "ALPHA") })
     }
 
     @Test
@@ -49,7 +50,7 @@ class VariantsTest {
         repeat(n) { counts.merge(VariantTable.pick(5.0, r), 1, Int::plus) }
         val total = Variant.entries.sumOf { it.weightAtMax }
         val normalShare = counts.getValue(Variant.NORMAL).toDouble() / n
-        assertEquals(40.0 / total, normalShare, 0.01)
+        assertEquals(Variant.NORMAL.weightAtMax.toDouble() / total, normalShare, 0.01)
     }
 }
 
