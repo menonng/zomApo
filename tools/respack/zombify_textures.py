@@ -47,7 +47,7 @@ TARGETS = {
     "shulker/shulker.png": "chitin",
     "blaze/blaze.png": "flesh",
     "ghast/ghast.png": "bone",
-    "slime/magma_cube.png": "slime",
+    "slime/magmacube.png": "slime",
 }
 EYES = ["enderman/enderman_eyes.png", "phantom/phantom_eyes.png", "creaking/creaking_eyes.png", "breeze/breeze_eyes.png"]
 
@@ -108,6 +108,13 @@ def zombify(img, style, seed):
                 s *= 0.6
                 hh = hh * 0.6 + 0.24 * 0.4      # 탁한 황록
                 v *= 0.85
+            elif style in ("dark", "warm"):
+                s *= 0.8 if style == "dark" else 0.75   # 원래 색(검정·주황)을 지킨다
+                v *= 0.95 if style == "dark" else 0.8
+            elif style == "tint":
+                s *= 0.7
+                hh = hh * 0.85 + 0.26 * 0.15    # 원래 색을 거의 지키고 살짝만 녹회색
+                v *= 0.88
             elif style == "bone":
                 s *= 0.7
                 v *= 0.9
@@ -122,6 +129,16 @@ def zombify(img, style, seed):
                     c = mix(c, FLESH, 0.65)     # 뼈에 붙은 살점
                 if n > 0.76:
                     c = mix(c, WOUND, 0.7)
+            elif style == "warm":
+                if n > 0.60:
+                    c = mix(c, (40, 34, 30), 0.5)  # 그을음
+                if n > 0.78:
+                    c = mix(c, WOUND, 0.6)
+            elif style in ("dark", "tint"):
+                if n > 0.62:
+                    c = mix(c, ROT, 0.3 if style == "dark" else 0.4)
+                if n > 0.78:
+                    c = mix(c, WOUND, 0.6)
             else:
                 if n > 0.58:
                     c = mix(c, ROT, 0.55)
@@ -129,7 +146,7 @@ def zombify(img, style, seed):
                     c = mix(c, WOUND, 0.7)
                 if 0.72 < n <= 0.74:
                     c = mix(c, (30, 22, 18), 0.6)  # 상처 가장자리
-            if rng.random() < 0.025:
+            if rng.random() < (0.012 if style in ("dark", "warm", "tint") else 0.025):
                 c = mix(c, SPORE, 0.6)
             px[x, y] = (*c, a)
     return img

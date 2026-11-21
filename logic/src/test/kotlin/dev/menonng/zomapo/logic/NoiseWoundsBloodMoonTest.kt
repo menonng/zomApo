@@ -4,6 +4,8 @@ import dev.menonng.zomapo.logic.bloodmoon.BloodMoon
 import dev.menonng.zomapo.logic.effects.Bleeding
 import dev.menonng.zomapo.logic.effects.Infection
 import dev.menonng.zomapo.logic.effects.InfectionStage
+import dev.menonng.zomapo.logic.effects.ZombieTrait
+import dev.menonng.zomapo.logic.effects.ZombieTraits
 import dev.menonng.zomapo.logic.noise.Listener
 import dev.menonng.zomapo.logic.noise.Noise
 import dev.menonng.zomapo.logic.noise.NoiseSource
@@ -36,23 +38,37 @@ class NoiseTest {
 
 class WoundsTest {
     @Test
-    @DisplayName("출혈: 확률 10+2L%×방어력 배율, 20초씩 최대 60초, 반 칸 아래로는 안 깎임")
+    @DisplayName("특성: 찢는 손톱 Lv2부터 4%(+1%p/레벨), 보균 Lv3부터 2%(+1%p/레벨), 아래 레벨은 없음")
     fun case01() {
-        assertEquals(0.10, Bleeding.chance(0, 0), 1e-9)
-        assertEquals(0.20 * 0.625, Bleeding.chance(5, 15), 1e-9)
-        assertEquals(0.16 * 1.5, Bleeding.chance(3, 0, variantFactor = 1.5), 1e-9)
-        assertEquals(400, Bleeding.extend(0))
-        assertEquals(1200, Bleeding.extend(1000))
+        assertEquals(0.0, ZombieTraits.laceratingChance(1), 1e-9)
+        assertEquals(0.04, ZombieTraits.laceratingChance(2), 1e-9)
+        assertEquals(0.07, ZombieTraits.laceratingChance(5), 1e-9)
+        assertEquals(0.0, ZombieTraits.carrierChance(2), 1e-9)
+        assertEquals(0.02, ZombieTraits.carrierChance(3), 1e-9)
+        assertEquals(0.04, ZombieTraits.carrierChance(5), 1e-9)
+        val r = Random(9)
+        val n = 100_000
+        val l5 = (1..n).map { ZombieTraits.roll(5, r) }
+        assertEquals(0.07, l5.count { ZombieTrait.LACERATING in it } / n.toDouble(), 0.004)
+        assertEquals(0.04, l5.count { ZombieTrait.CARRIER in it } / n.toDouble(), 0.003)
+        assertTrue((1..2000).all { ZombieTraits.roll(1, r).isEmpty() })
+    }
+
+    @Test
+    @DisplayName("출혈: 30초, 출혈 중에는 갱신 없음, 반 칸 아래로는 안 깎임")
+    fun case02() {
+        assertEquals(600, Bleeding.onHit(0))
+        assertEquals(250, Bleeding.onHit(250))
         assertEquals(5f, Bleeding.healthAfterTick(6f))
         assertEquals(1f, Bleeding.healthAfterTick(1.5f))
         assertEquals(0.5f, Bleeding.healthAfterTick(0.5f))
     }
 
     @Test
-    @DisplayName("감염: 확률 1+0.3L%(출혈 중 2배), 접속 20분 발열·60분 악화, 해독제·의무실·명령으로만 풀림")
-    fun case02() {
-        assertEquals(0.019, Infection.chance(3, 0, bleeding = false), 1e-9)
-        assertEquals(0.038 * 0.625, Infection.chance(3, 15, bleeding = true), 1e-9)
+    @DisplayName("감염: 보균에게 맞으면 감염(이미 감염이면 그대로), 접속 20분 발열·60분 악화, 해독제·의무실·명령으로만 풀림")
+    fun case03() {
+        assertEquals(0L, Infection.onCarrierHit(null))
+        assertEquals(30_000L, Infection.onCarrierHit(30_000L))
         assertEquals(InfectionStage.INCUBATION, Infection.stage(23_999))
         assertEquals(InfectionStage.FEVER, Infection.stage(24_000))
         assertEquals(InfectionStage.WORSENING, Infection.stage(72_000))
