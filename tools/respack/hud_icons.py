@@ -78,20 +78,23 @@ INF_PAL = {
 
 # ---------------------------------------------------------------- 아이템 (16×16)
 
+ANTIDOTE_INNER = {7: (4, 11), 8: (4, 11), 9: (4, 11), 10: (4, 11), 11: (4, 11), 12: (4, 11), 13: (5, 10)}
+
+
 def antidote():
-    """해독제(황금 사과로 만든 약): 바닐라 병과 같은 하늘빛 유리 4단계 + 황금 사과 색 띠의 약물.
-    바닐라 물약과 한눈에 구별되게 목이 긴 약병, 금실 감은 코르크, 목에 묶은 녹색 십자 꼬리표."""
+    """해독제 병(바닐라 물약과 같은 두 겹 구조의 위층): 하늘빛 유리 4단계, 금실 감은 코르크, 목이 긴 약병.
+    약물은 아래층(antidote_overlay)이고, 바닐라 물약처럼 물약 색 속성(potion_contents.custom_color)으로 물든다."""
     rows = [
         "......kkkC......",
         "......CCCc......",
         ".....gyGGGg.....",
         "......LH.D......",
-        "......LH.Dt.....",
-        ".....L....Dt....",
-        "....L......Dtpxp",
-        "...L........Dxxx",
-        "...L........Dpxp",
-        "...L........DPPP",
+        "......LH.D......",
+        ".....L....D.....",
+        "....L......D....",
+        "...L........D...",
+        "...L........D...",
+        "...L........D...",
         "...L........D...",
         "...L........D...",
         "...L........D...",
@@ -103,29 +106,28 @@ def antidote():
         'L': hexc('#B3CFEC'), 'H': hexc('#D4E5F7'), 'M': hexc('#8BADD0'), 'D': hexc('#5D8FC2'),
         'k': hexc('#D46D49'), 'C': hexc('#A94725'), 'c': hexc('#973716'),
         'g': hexc('#B26411'), 'G': hexc('#DBA213'), 'y': hexc('#ECCB45'),
-        't': hexc('#9C7A4E'), 'p': hexc('#F1EAD6'), 'P': hexc('#C9BB98'), 'x': hexc('#3FA34D'),
     }
     im = grid_image(rows, pal)
     px = im.load()
-    gold = [hexc('#752802'), hexc('#B26411'), hexc('#DBA213'), hexc('#ECCB45'), hexc('#EAEE57'), hexc('#F6F892')]
-    # 약물: 7~13행 안쪽. 왼쪽 위가 밝고 오른쪽 아래가 어둡다(바닐라 물약과 같은 빛 방향)
-    inner = {7: (4, 11), 8: (4, 11), 9: (4, 11), 10: (4, 11), 11: (4, 11), 12: (4, 11), 13: (5, 10)}
-    for y, (x0, x1) in inner.items():
+    # 물들지 않는 반짝임과 유리 반사(위층이라 약물 색 위에 그대로 보인다)
+    for (x, y, c) in ((6, 9, '#FEFFE6'), (9, 11, '#FFFBD0'), (5, 8, '#D4E5F7'), (4, 9, '#D4E5F7'), (4, 10, '#B3CFEC')):
+        px[x, y] = hexc(c)
+    px[5, 6] = hexc('#D4E5F7', 150)
+    return im
+
+
+def antidote_overlay():
+    """약물 아래층: 회색 단계만 칠한다. 게임이 물약 색(황금)을 곱해 물들인다(바닐라 potion_overlay 와 같은 방식)."""
+    im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    px = im.load()
+    grays = [0x9C, 0xB6, 0xCE, 0xE3, 0xF3, 0xFF]
+    for y, (x0, x1) in ANTIDOTE_INNER.items():
         for x in range(x0, x1 + 1):
             u = (x - x0) / max(1, x1 - x0)
             v = (y - 7) / 6
-            t = 0.92 - 0.5 * u - 0.34 * v
-            if y == 7:
-                t += 0.18           # 맨 위 액면은 밝게
-            if x == x1 or y == 13:
-                t -= 0.12           # 오른쪽·바닥 가장자리 그늘
-            i = max(1, min(5, int(round(t * 5))))
-            px[x, y] = gold[i]
-    # 빛나는 알갱이(황금 사과의 반짝임)와 유리 반사
-    for (x, y, c) in ((6, 9, '#FEFFE6'), (9, 11, '#F6F892'), (7, 12, '#ECCB45'), (5, 8, '#D4E5F7'), (4, 9, '#D4E5F7'), (4, 10, '#B3CFEC')):
-        px[x, y] = hexc(c)
-    # 액면 위 빈 유리 안쪽에 아주 옅은 반사 한 줄
-    px[5, 6] = hexc('#D4E5F7', 150)
+            t = 0.92 - 0.5 * u - 0.34 * v + (0.18 if y == 7 else 0) - (0.12 if (x == x1 or y == 13) else 0)
+            g = grays[max(1, min(5, int(round(t * 5))))]
+            px[x, y] = (g, g, g, 255)
     return im
 
 
@@ -172,14 +174,16 @@ def main():
     save(clear, 'assets/minecraft/textures/gui/sprites/boss_bar/white_progress.png')
 
     save(antidote(), 'assets/zomapo/textures/item/antidote.png')
+    save(antidote_overlay(), 'assets/zomapo/textures/item/antidote_overlay.png')
     save(virus_crystal(), 'assets/zomapo/textures/item/virus_crystal.png')
-    write_json({"parent": "minecraft:item/generated", "textures": {"layer0": "zomapo:item/antidote"}}, 'assets/zomapo/models/item/antidote.json')
+    write_json({"parent": "minecraft:item/generated", "textures": {"layer0": "zomapo:item/antidote_overlay", "layer1": "zomapo:item/antidote"}}, 'assets/zomapo/models/item/antidote.json')
     write_json({"parent": "minecraft:item/generated", "textures": {"layer0": "zomapo:item/virus_crystal"}}, 'assets/zomapo/models/item/virus_crystal.json')
 
     # 바닐라 아이템 정의 덮어쓰기: custom_model_data 문자열로 고르고, 아니면 바닐라 그대로
     write_json({"model": {
         "type": "minecraft:select", "property": "minecraft:custom_model_data", "index": 0,
-        "cases": [{"when": "zomapo:antidote", "model": {"type": "minecraft:model", "model": "zomapo:item/antidote"}}],
+        "cases": [{"when": "zomapo:antidote", "model": {"type": "minecraft:model", "model": "zomapo:item/antidote",
+                                                         "tints": [{"type": "minecraft:potion", "default": -13083194}]}}],
         "fallback": {"type": "minecraft:model", "model": "minecraft:item/potion",
                      "tints": [{"type": "minecraft:potion", "default": -13083194}]},
     }}, 'assets/minecraft/items/potion.json')
@@ -189,8 +193,8 @@ def main():
         "fallback": {"type": "minecraft:model", "model": "minecraft:item/amethyst_shard"},
     }}, 'assets/minecraft/items/amethyst_shard.json')
     # 이름은 아이템 설명 대신 번역 키로(리소스팩 언어 파일은 바닐라 파일과 키 단위로 합쳐진다)
-    write_json({"item.minecraft.potion.effect.zomapo_antidote": "해독제", "item.zomapo.virus_crystal": "바이러스 결정"}, 'assets/minecraft/lang/ko_kr.json')
-    write_json({"item.minecraft.potion.effect.zomapo_antidote": "Antidote", "item.zomapo.virus_crystal": "Virus Crystal"}, 'assets/minecraft/lang/en_us.json')
+    write_json({"item.minecraft.potion.effect.zomapo_antidote": "해독제", "item.zomapo.virus_crystal": "바이러스 결정", "effect.zomapo.cure_infection": "감염 해제"}, 'assets/minecraft/lang/ko_kr.json')
+    write_json({"item.minecraft.potion.effect.zomapo_antidote": "Antidote", "item.zomapo.virus_crystal": "Virus Crystal", "effect.zomapo.cure_infection": "Cures Infection"}, 'assets/minecraft/lang/en_us.json')
     print('written to', os.path.abspath(ROOT))
 
 

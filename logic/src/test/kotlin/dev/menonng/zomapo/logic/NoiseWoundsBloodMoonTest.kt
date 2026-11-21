@@ -84,12 +84,12 @@ class WoundsTest {
 
 class AntidoteTest {
     @Test
-    @DisplayName("해독제: 양조기(황금 사과 1개로 3병)가 제작대(황금 사과 1개 + 황금 당근으로 1병)보다 효율적")
+    @DisplayName("해독제: 양조기(꿀병 1개로 3병)가 제작대(꿀병 1개 + 수박·당근 + 썩은 살로 1병)보다 효율적, 효과 없는 물약 네 가지에서 양조")
     fun case01() {
         val a = dev.menonng.zomapo.logic.effects.Antidote
-        assertTrue(a.goldenApplesPerAntidote(true) < a.goldenApplesPerAntidote(false))
-        assertEquals(1.0 / 3.0, a.goldenApplesPerAntidote(true), 1e-9)
-        assertEquals(1.0, a.goldenApplesPerAntidote(false), 1e-9)
+        assertTrue(a.honeyPerAntidote(true) < a.honeyPerAntidote(false))
+        assertEquals(1.0 / 3.0, a.honeyPerAntidote(true), 1e-9)
+        assertEquals(4, a.BREW_BASES.size)
     }
 }
 

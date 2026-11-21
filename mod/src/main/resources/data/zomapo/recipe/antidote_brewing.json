@@ -3,17 +3,22 @@
   "input": {
     "item": "minecraft:potion",
     "potion_contents": {
-      "potions": "minecraft:awkward"
+      "potions": [
+        "minecraft:water",
+        "minecraft:awkward",
+        "minecraft:mundane",
+        "minecraft:thick"
+      ]
     }
   },
   "reagent": {
-    "item": "minecraft:golden_apple"
+    "item": "minecraft:honey_bottle"
   },
   "output": {
     "id": "minecraft:potion",
     "components": {
       "minecraft:potion_contents": {
-        "custom_color": 14856762,
+        "custom_color": 16763196,
         "custom_name": "zomapo_antidote"
       },
       "minecraft:custom_model_data": {
@@ -21,12 +26,19 @@
           "zomapo:antidote"
         ]
       },
-      "minecraft:rarity": "uncommon",
       "minecraft:tooltip_display": {
         "hidden_components": [
           "minecraft:potion_contents"
         ]
       },
+      "minecraft:lore": [
+        {
+          "translate": "effect.zomapo.cure_infection",
+          "fallback": "감염 해제",
+          "color": "blue",
+          "italic": false
+        }
+      ],
       "minecraft:custom_data": {
         "zomapo": "antidote"
       }

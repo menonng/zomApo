@@ -90,24 +90,28 @@ object Infection {
 }
 
 /**
- * 해독제 조합법(2026-11-21 개정): 두 방식 모두 **바닐라 재료만** 쓴다. 바닐라에서 좀비 주민을 치료하는 황금 사과가 핵심 재료.
- * 아이템은 바닐라 물약에 custom_model_data "zomapo:antidote" 를 붙인 것(설명 줄 없이 속성으로: 이름 키·희귀도·색).
- * 양조기가 더 효율적이다: 황금 사과 1개로 3병 대 제작대 1병(+ 황금 당근).
+ * 해독제 조합법(2026-11-21 개정 2): 두 방식 모두 **바닐라 재료만**, 값싸고 다양하게.
+ * - 제작대: 꿀병 + (반짝이는 수박 조각 또는 황금 당근) + 썩은 살 → 1병. 꿀은 바닐라에서 독을 푸는 재료, 썩은 살은 '감염에서 얻는 혈청'.
+ * - 양조기: 아무 효과 없는 물약(물병·이상한·평범한·진한 물약) + 꿀병 → 병마다 해독제. 꿀병 1개로 3병.
+ * 아이템은 바닐라 물약 + custom_model_data "zomapo:antidote". 이름은 흰색(바닐라 물약과 같음), 속성 줄은 바닐라 물약 효과 줄 모양.
  */
 object Antidote {
     const val MODEL = "zomapo:antidote"
     const val CRYSTAL_MODEL = "zomapo:virus_crystal"
     /** 물약 이름 키 접미사: 클라이언트는 item.minecraft.potion.effect.<이것> 을 리소스팩 언어 파일에서 찾는다. */
     const val POTION_NAME = "zomapo_antidote"
-    const val COLOR = 0xE2B23A
+    /** 물약 색. 그림의 약물 층이 바닐라 물약처럼 이 색으로 물든다. */
+    const val COLOR = 0xFFC93C
+    const val EFFECT_KEY = "effect.zomapo.cure_infection"
 
-    /** 제작대(모양 없음): 유리병 + 황금 사과 + 황금 당근 → 해독제 1 */
-    const val CRAFT_GOLDEN_APPLES = 1
+    /** 제작대(모양 없음): 꿀병 + 반짝이는 수박 조각|황금 당근 + 썩은 살 → 해독제 1 */
+    const val CRAFT_HONEY = 1
     const val CRAFT_OUTPUT = 1
-    /** 양조기: 어색한 물약 + 황금 사과 → 해독제(병마다). 한 번에 3병 */
-    const val BREW_GOLDEN_APPLES = 1
+    /** 양조기: 효과 없는 물약 + 꿀병 → 해독제(병마다). 한 번에 3병 */
+    const val BREW_HONEY = 1
     const val BREW_OUTPUT = 3
+    val BREW_BASES = listOf("minecraft:water", "minecraft:awkward", "minecraft:mundane", "minecraft:thick")
 
-    fun goldenApplesPerAntidote(brewing: Boolean): Double =
-        if (brewing) BREW_GOLDEN_APPLES.toDouble() / BREW_OUTPUT else CRAFT_GOLDEN_APPLES.toDouble() / CRAFT_OUTPUT
+    fun honeyPerAntidote(brewing: Boolean): Double =
+        if (brewing) BREW_HONEY.toDouble() / BREW_OUTPUT else CRAFT_HONEY.toDouble() / CRAFT_OUTPUT
 }

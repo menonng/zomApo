@@ -32,25 +32,30 @@ internal object ZomSmoke {
         val awkward = PotionContents.createItemStack(Items.POTION, Potions.AWKWARD)
         val carrot = ItemStack(Items.GOLDEN_CARROT)
 
-        val apple = ItemStack(Items.GOLDEN_APPLE)
-        val bottle = ItemStack(Items.GLASS_BOTTLE)
+        val honey = ItemStack(Items.HONEY_BOTTLE)
+        val melon = ItemStack(Items.GLISTERING_MELON_SLICE)
+        val flesh = ItemStack(Items.ROTTEN_FLESH)
 
         val craft = rm.byKey(key("zomapo", "antidote_crafting")).orElse(null)?.value() as? CraftingRecipe
         if (craft == null) f += "해독제 제작 조합법 없음" else {
-            val input = CraftingInput.of(2, 2, listOf(bottle, apple, carrot, ItemStack.EMPTY))
-            if (!craft.matches(input, level)) f += "제작 조합법이 맞지 않음"
-            else if (!ItemStack.isSameItemSameComponents(craft.assemble(input), ZomItems.antidote())) f += "제작 결과물 부품 불일치: ${craft.assemble(input).components}"
-            val noApple = CraftingInput.of(2, 2, listOf(bottle, carrot, ItemStack.EMPTY, ItemStack.EMPTY))
-            if (craft.matches(noApple, level)) f += "황금 사과 없이 제작됨"
+            for (gold in listOf(melon, carrot)) {
+                val input = CraftingInput.of(2, 2, listOf(honey, gold, flesh, ItemStack.EMPTY))
+                if (!craft.matches(input, level)) f += "제작 조합법이 맞지 않음(${gold.item})"
+                else if (!ItemStack.isSameItemSameComponents(craft.assemble(input), ZomItems.antidote())) f += "제작 결과물 부품 불일치: ${craft.assemble(input).components}"
+            }
+            if (craft.matches(CraftingInput.of(2, 2, listOf(honey, melon, ItemStack.EMPTY, ItemStack.EMPTY)), level)) f += "썩은 살 없이 제작됨"
         }
 
         val brew = rm.byKey(key("zomapo", "antidote_brewing")).orElse(null)?.value() as? BrewingRecipe
         if (brew == null) f += "해독제 양조법 없음" else {
-            val input = BrewingInput(awkward, apple)
-            if (!brew.matches(input, level)) f += "양조법이 맞지 않음"
-            else if (!ItemStack.isSameItemSameComponents(brew.assemble(input), ZomItems.antidote())) f += "양조 결과물 부품 불일치: ${brew.assemble(input).components}"
-            if (brew.matches(BrewingInput(water, apple), level)) f += "물병으로도 양조됨"
-            if (brew.matches(BrewingInput(ZomItems.antidote(), apple), level)) f += "해독제를 다시 양조함"
+            for (p in listOf(Potions.WATER, Potions.AWKWARD, Potions.MUNDANE, Potions.THICK)) {
+                val base = PotionContents.createItemStack(Items.POTION, p)
+                val input = BrewingInput(base, honey)
+                if (!brew.matches(input, level)) f += "양조법이 맞지 않음($p)"
+                else if (!ItemStack.isSameItemSameComponents(brew.assemble(input), ZomItems.antidote())) f += "양조 결과물 부품 불일치"
+            }
+            if (brew.matches(BrewingInput(PotionContents.createItemStack(Items.POTION, Potions.HEALING), honey), level)) f += "효과 있는 물약으로도 양조됨"
+            if (brew.matches(BrewingInput(ZomItems.antidote(), honey), level)) f += "해독제를 다시 양조함"
         }
         val brewOthers = rm.getRecipes().count { h -> (h.value() as? BrewingRecipe)?.matches(BrewingInput(ZomItems.antidote(), ItemStack(Items.GUNPOWDER)), level) == true }
         if (brewOthers > 0) f += "해독제가 바닐라 양조법 재료로 쓰임: $brewOthers"
@@ -66,7 +71,7 @@ internal object ZomSmoke {
 
         val crystal = ZomItems.virusCrystal()
         if (crystal.has(net.minecraft.core.component.DataComponents.PROVIDES_TRIM_MATERIAL)) f += "바이러스 결정에 갑옷 장식 재료 속성이 남음"
-        if (ZomItems.antidote().get(net.minecraft.core.component.DataComponents.LORE)?.lines()?.isNotEmpty() == true) f += "해독제에 설명 줄이 있음"
+        if (ZomItems.antidote().get(net.minecraft.core.component.DataComponents.LORE)?.lines()?.size != 1) f += "해독제 속성 줄이 한 줄이 아님"
 
         val fake = FakePlayer.get(level)
         WoundsSystem.set(fake, WoundState(bleedTicks = Bleeding.DURATION_TICKS))

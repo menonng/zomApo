@@ -1,7 +1,6 @@
 package dev.menonng.zomapo.logic
 
 import dev.menonng.zomapo.logic.alpha.AlphaRules
-import dev.menonng.zomapo.logic.alpha.AlphaTracker
 import dev.menonng.zomapo.logic.gimmick.Gimmick
 import dev.menonng.zomapo.logic.gimmick.GimmickRules
 import dev.menonng.zomapo.logic.gimmick.GimmickTimer
@@ -94,34 +93,32 @@ class GimmickTest {
 
 class AlphaTest {
     @Test
-    @DisplayName("알파: 접속 3명 이상·없을 때만, 256~512블록에서, 초속 5.6으로 다가와 96블록에서 나타난다")
+    @DisplayName("알파: 접속 3명 이상·없을 때만, 256~512블록에서 생긴다. 경유점은 32블록씩, 대상 앞에서는 대상 자리")
     fun case01() {
         val r = Random(11)
         assertFalse(AlphaRules.shouldSpawn(r, 2, false))
         assertFalse(AlphaRules.shouldSpawn(Random(0), 5, true))
         val spawns = (1..300).map { AlphaRules.spawnPoint(r, 100.0, -50.0) }
         assertTrue(spawns.all { hypot(it.first - 100.0, it.second + 50.0) in 255.9..512.1 })
-        val tr = AlphaTracker(400.0, 0.0, "minecraft:overworld")
-        var d = 400.0
-        var ticks = 0
-        while (!tr.materialized) { d = tr.step(0.0, 0.0, "minecraft:overworld"); ticks++ }
-        assertEquals(96.0, d, 0.3)
-        assertTrue(kotlin.math.abs(((400 - 96) / AlphaRules.SPEED_PER_TICK).toInt() - ticks) <= 2)
+        val w = AlphaRules.waypoint(0.0, 0.0, 300.0, 400.0)
+        assertEquals(32.0, hypot(w.first, w.second), 1e-9)
+        assertEquals(Pair(10.0, 10.0), AlphaRules.waypoint(0.0, 0.0, 10.0, 10.0))
     }
 
     @Test
-    @DisplayName("대상이 네더로 가면 좌표를 1/8 로 옮기고 60초 쉰 뒤 따라간다. 공격하면 3초 느려진다")
+    @DisplayName("막히면 2초째 부수고 10초째 도약(최대 16블록, 대상을 넘지 않음). 네더 배율 1/8·8, 공격 뒤 3초 감속")
     fun case02() {
-        val tr = AlphaTracker(800.0, 0.0, "minecraft:overworld")
-        tr.step(10.0, 0.0, "minecraft:the_nether")
-        assertEquals("minecraft:the_nether", tr.dimension)
-        assertEquals(100.0, tr.x, 1e-6)
-        assertEquals(AlphaRules.DIMENSION_DELAY_TICKS, tr.waitTicks)
-        repeat(AlphaRules.DIMENSION_DELAY_TICKS) { tr.step(10.0, 0.0, "minecraft:the_nether") }
-        val before = tr.x
-        tr.onAttack()
-        tr.step(10.0, 0.0, "minecraft:the_nether")
-        assertEquals(before - AlphaRules.SLOW_SPEED_PER_TICK, tr.x, 1e-9)
+        assertEquals(AlphaRules.Stuck.NONE, AlphaRules.stuck(39))
+        assertEquals(AlphaRules.Stuck.BREAK, AlphaRules.stuck(40))
+        assertEquals(AlphaRules.Stuck.LURCH, AlphaRules.stuck(200))
+        val l = AlphaRules.lurch(0.0, 0.0, 100.0, 0.0)
+        assertEquals(16.0, l.first, 1e-9)
+        val near = AlphaRules.lurch(0.0, 0.0, 5.0, 0.0)
+        assertEquals(3.0, near.first, 1e-9)
+        assertEquals(1.0 / 8.0, AlphaRules.dimensionScale("minecraft:overworld", "minecraft:the_nether"), 1e-12)
+        assertEquals(8.0, AlphaRules.dimensionScale("minecraft:the_nether", "minecraft:overworld"), 1e-12)
+        assertEquals(AlphaRules.SLOW_SPEED_PER_TICK, AlphaRules.speedPerTick(10), 1e-12)
+        assertEquals(AlphaRules.SPEED_PER_TICK, AlphaRules.speedPerTick(60), 1e-12)
     }
 
     @Test

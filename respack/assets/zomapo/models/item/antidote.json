@@ -1,6 +1,7 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "zomapo:item/antidote"
+    "layer0": "zomapo:item/antidote_overlay",
+    "layer1": "zomapo:item/antidote"
   }
 }

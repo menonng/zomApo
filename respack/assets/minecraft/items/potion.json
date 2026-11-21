@@ -8,7 +8,13 @@
         "when": "zomapo:antidote",
         "model": {
           "type": "minecraft:model",
-          "model": "zomapo:item/antidote"
+          "model": "zomapo:item/antidote",
+          "tints": [
+            {
+              "type": "minecraft:potion",
+              "default": -13083194
+            }
+          ]
         }
       }
     ],
