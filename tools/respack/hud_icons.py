@@ -79,58 +79,53 @@ INF_PAL = {
 # ---------------------------------------------------------------- 아이템 (16×16)
 
 def antidote():
-    """둥근 플라스크: 코르크, 유리 목, 초록 약물, 그 안에 뜬 결정 조각, 거품."""
-    im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    """해독제(황금 사과로 만든 약): 바닐라 병과 같은 하늘빛 유리 4단계 + 황금 사과 색 띠의 약물.
+    바닐라 물약과 한눈에 구별되게 목이 긴 약병, 금실 감은 코르크, 목에 묶은 녹색 십자 꼬리표."""
+    rows = [
+        "......kkkC......",
+        "......CCCc......",
+        ".....gyGGGg.....",
+        "......LH.D......",
+        "......LH.Dt.....",
+        ".....L....Dt....",
+        "....L......Dtpxp",
+        "...L........Dxxx",
+        "...L........Dpxp",
+        "...L........DPPP",
+        "...L........D...",
+        "...L........D...",
+        "...L........D...",
+        "....D......D....",
+        ".....DDDDDD.....",
+        "................",
+    ]
+    pal = {
+        'L': hexc('#B3CFEC'), 'H': hexc('#D4E5F7'), 'M': hexc('#8BADD0'), 'D': hexc('#5D8FC2'),
+        'k': hexc('#D46D49'), 'C': hexc('#A94725'), 'c': hexc('#973716'),
+        'g': hexc('#B26411'), 'G': hexc('#DBA213'), 'y': hexc('#ECCB45'),
+        't': hexc('#9C7A4E'), 'p': hexc('#F1EAD6'), 'P': hexc('#C9BB98'), 'x': hexc('#3FA34D'),
+    }
+    im = grid_image(rows, pal)
     px = im.load()
-    glass_dark = hexc('#3A4A52')
-    glass = hexc('#9FB6C0', 230)
-    glass_hi = hexc('#E8F6FA')
-    cork = hexc('#8A5A32')
-    cork_d = hexc('#5C3A1E')
-    cork_h = hexc('#B07A48')
-    liquid = [hexc('#1F5E1A'), hexc('#2E8A26'), hexc('#55BB44'), hexc('#7FD36E')]
-    cx, cy, r = 7.5, 10.0, 5.2
-    # 몸통(원) 외곽선과 내부
-    for y in range(16):
-        for x in range(16):
-            d = math.hypot(x - cx, y - cy)
-            if d <= r - 0.9:
-                # 약물: 위쪽 0.25 는 빈 유리, 아래로 갈수록 어둡게
-                level = cy - r * 0.45
-                if y >= level:
-                    t = (y - level) / (cy + r - level)
-                    shade = 3 if t < 0.15 else 2 if t < 0.55 else 1 if t < 0.85 else 0
-                    if x < cx - 2.5 and shade < 3:
-                        shade += 1
-                    px[x, y] = liquid[shade]
-                else:
-                    px[x, y] = hexc('#C9DDE3', 110)
-            elif d <= r + 0.2:
-                px[x, y] = glass_dark
-    # 목
-    for y in range(3, 6):
-        px[6, y] = glass_dark
-        px[9, y] = glass_dark
-        px[7, y] = glass
-        px[8, y] = hexc('#C9DDE3', 140)
-    # 코르크
-    for x in range(6, 10):
-        px[x, 1] = cork_h if x < 8 else cork
-        px[x, 2] = cork if x < 9 else cork_d
-    px[6, 0] = (0, 0, 0, 0)
-    for x in (6, 9):
-        px[x, 1] = cork_d
-    # 결정 조각(하늘색 마름모)
-    shard = {(8, 9): '#E6FFFC', (8, 10): '#39C5BB', (9, 10): '#1F8C84', (7, 11): '#39C5BB', (8, 11): '#24A79E', (8, 12): '#1F8C84'}
-    for (x, y), c in shard.items():
+    gold = [hexc('#752802'), hexc('#B26411'), hexc('#DBA213'), hexc('#ECCB45'), hexc('#EAEE57'), hexc('#F6F892')]
+    # 약물: 7~13행 안쪽. 왼쪽 위가 밝고 오른쪽 아래가 어둡다(바닐라 물약과 같은 빛 방향)
+    inner = {7: (4, 11), 8: (4, 11), 9: (4, 11), 10: (4, 11), 11: (4, 11), 12: (4, 11), 13: (5, 10)}
+    for y, (x0, x1) in inner.items():
+        for x in range(x0, x1 + 1):
+            u = (x - x0) / max(1, x1 - x0)
+            v = (y - 7) / 6
+            t = 0.92 - 0.5 * u - 0.34 * v
+            if y == 7:
+                t += 0.18           # 맨 위 액면은 밝게
+            if x == x1 or y == 13:
+                t -= 0.12           # 오른쪽·바닥 가장자리 그늘
+            i = max(1, min(5, int(round(t * 5))))
+            px[x, y] = gold[i]
+    # 빛나는 알갱이(황금 사과의 반짝임)와 유리 반사
+    for (x, y, c) in ((6, 9, '#FEFFE6'), (9, 11, '#F6F892'), (7, 12, '#ECCB45'), (5, 8, '#D4E5F7'), (4, 9, '#D4E5F7'), (4, 10, '#B3CFEC')):
         px[x, y] = hexc(c)
-    # 거품
-    px[5, 10] = hexc('#B6EE9A')
-    px[10, 12] = hexc('#B6EE9A')
-    # 유리 반사
-    px[4, 8] = glass_hi
-    px[4, 9] = glass_hi
-    px[5, 7] = glass_hi
+    # 액면 위 빈 유리 안쪽에 아주 옅은 반사 한 줄
+    px[5, 6] = hexc('#D4E5F7', 150)
     return im
 
 
@@ -193,6 +188,9 @@ def main():
         "cases": [{"when": "zomapo:virus_crystal", "model": {"type": "minecraft:model", "model": "zomapo:item/virus_crystal"}}],
         "fallback": {"type": "minecraft:model", "model": "minecraft:item/amethyst_shard"},
     }}, 'assets/minecraft/items/amethyst_shard.json')
+    # 이름은 아이템 설명 대신 번역 키로(리소스팩 언어 파일은 바닐라 파일과 키 단위로 합쳐진다)
+    write_json({"item.minecraft.potion.effect.zomapo_antidote": "해독제", "item.zomapo.virus_crystal": "바이러스 결정"}, 'assets/minecraft/lang/ko_kr.json')
+    write_json({"item.minecraft.potion.effect.zomapo_antidote": "Antidote", "item.zomapo.virus_crystal": "Virus Crystal"}, 'assets/minecraft/lang/en_us.json')
     print('written to', os.path.abspath(ROOT))
 
 

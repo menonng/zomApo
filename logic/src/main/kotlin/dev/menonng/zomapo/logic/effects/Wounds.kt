@@ -90,19 +90,24 @@ object Infection {
 }
 
 /**
- * 해독제 조합법(2026-11-21). 아이템은 바닐라 물약에 custom_model_data "zomapo:antidote" 를 붙인 것.
- * 양조기가 더 효율적이다: 결정 1개로 3병(결정 1/3개/병) 대 제작대 결정 2개/병.
+ * 해독제 조합법(2026-11-21 개정): 두 방식 모두 **바닐라 재료만** 쓴다. 바닐라에서 좀비 주민을 치료하는 황금 사과가 핵심 재료.
+ * 아이템은 바닐라 물약에 custom_model_data "zomapo:antidote" 를 붙인 것(설명 줄 없이 속성으로: 이름 키·희귀도·색).
+ * 양조기가 더 효율적이다: 황금 사과 1개로 3병 대 제작대 1병(+ 황금 당근).
  */
 object Antidote {
     const val MODEL = "zomapo:antidote"
     const val CRYSTAL_MODEL = "zomapo:virus_crystal"
-    /** 제작대(모양 없음): 유리병 + 바이러스 결정 2 + 황금 당근 → 해독제 1 */
-    const val CRAFT_CRYSTALS = 2
+    /** 물약 이름 키 접미사: 클라이언트는 item.minecraft.potion.effect.<이것> 을 리소스팩 언어 파일에서 찾는다. */
+    const val POTION_NAME = "zomapo_antidote"
+    const val COLOR = 0xE2B23A
+
+    /** 제작대(모양 없음): 유리병 + 황금 사과 + 황금 당근 → 해독제 1 */
+    const val CRAFT_GOLDEN_APPLES = 1
     const val CRAFT_OUTPUT = 1
-    /** 양조기: 어색한 물약 + 바이러스 결정 1 → 해독제(병마다). 한 번에 3병 */
-    const val BREW_CRYSTALS = 1
+    /** 양조기: 어색한 물약 + 황금 사과 → 해독제(병마다). 한 번에 3병 */
+    const val BREW_GOLDEN_APPLES = 1
     const val BREW_OUTPUT = 3
 
-    fun crystalsPerAntidote(brewing: Boolean): Double =
-        if (brewing) BREW_CRYSTALS.toDouble() / BREW_OUTPUT else CRAFT_CRYSTALS.toDouble() / CRAFT_OUTPUT
+    fun goldenApplesPerAntidote(brewing: Boolean): Double =
+        if (brewing) BREW_GOLDEN_APPLES.toDouble() / BREW_OUTPUT else CRAFT_GOLDEN_APPLES.toDouble() / CRAFT_OUTPUT
 }
