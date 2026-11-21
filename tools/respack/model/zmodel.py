@@ -105,6 +105,9 @@ def cube_polys(c, tw, th):
         ('SOUTH', [4, 5, 6, 7], (f11, f14, f12, f15)),
     ]
     faces = set(f.upper() for f in (c.get('faces') or ['DOWN', 'UP', 'WEST', 'NORTH', 'EAST', 'SOUTH']))
+    normals = {'DOWN': (0, -1, 0), 'UP': (0, 1, 0), 'WEST': (-1, 0, 0), 'EAST': (1, 0, 0), 'NORTH': (0, 0, -1), 'SOUTH': (0, 0, 1)}
+    if mirror:
+        normals['WEST'], normals['EAST'] = (1, 0, 0), (-1, 0, 0)
     out = []
     for name, idx, (u1, v1, u2, v2) in spec:
         if name not in faces:
@@ -113,37 +116,64 @@ def cube_polys(c, tw, th):
         verts = [V[i] + (uvs[k][0] / TW, uvs[k][1] / TH) for k, i in enumerate(idx)]
         if mirror:
             verts = verts[::-1]
-        out.append((name, verts))
+        out.append((name, verts, normals[name]))
     return out
+
+
+def axis_rot(axis, deg):
+    a = math.radians(deg)
+    c, s_ = math.cos(a), math.sin(a)
+    if axis == 'x':
+        return np.array([[1, 0, 0], [0, c, -s_], [0, s_, c]])
+    if axis == 'y':
+        return np.array([[c, 0, s_], [0, 1, 0], [-s_, 0, c]])
+    return np.array([[c, -s_, 0], [s_, c, 0], [0, 0, 1]])
 
 
 def world_faces(model):
-    """모든 면을 세계 좌표로. [(점 4개(3D), uv 4개, 텍스처 이름, 중심, 법선)]"""
+    """모든 면을 세계 좌표로. [(점 4개(3D), uv 4개, 텍스처 이름, 중심, 법선, 발광)]"""
     tw, th = model.tex_size
     out = []
+    flip = np.array([-1.0, -1.0, 1.0])
     for part in model.root.walk():
         m = part.world()
+        R = m[:3, :3]
         for c in part.cubes:
             if c.get('hidden'):
                 continue
-            ox, oy, oz = c['origin']
-            w, h, d = c['size']
-            cc = m @ np.array([ox + w / 2, oy + h / 2, oz + d / 2, 1.0])
-            ctr_cube = np.array([-cc[0], 24 - cc[1], cc[2]])
             ctw, cth = (c['tex_size'] if 'tex_size' in c else (tw, th))
-            for name, verts in cube_polys(c, ctw, cth):
+            rot = c.get('rot')
+            if rot:
+                Rc = axis_rot(rot[0], rot[1])
+                pv = np.array(rot[2], dtype=float)
+            for name, verts, nrm in cube_polys(c, ctw, cth):
                 pts = []
                 uvs = []
                 for (x, y, z, u, v) in verts:
-                    p = m @ np.array([x, y, z, 1.0])
+                    q = np.array([x, y, z], dtype=float)
+                    if rot:
+                        q = Rc @ (q - pv) + pv
+                    p = m @ np.array([q[0], q[1], q[2], 1.0])
                     pts.append(np.array([-p[0], 24 - p[1], p[2]]))
                     uvs.append((u, v))
-                ctr = sum(pts) / 4
-                n = ctr - ctr_cube
+                n = np.array(nrm, dtype=float)
+                if rot:
+                    n = Rc @ n
+                n = (R @ n) * flip
                 ln = np.linalg.norm(n)
                 n = n / ln if ln > 1e-9 else np.array([0, 1.0, 0])
-                out.append((pts, uvs, c.get('tex', 'base'), ctr, n))
+                ctr = sum(pts) / 4
+                out.append((pts, uvs, c.get('tex', 'base'), ctr, n, bool(c.get('glow'))))
     return out
+
+
+_L0 = np.array([0.2, 1.0, -0.7]) / np.linalg.norm([0.2, 1.0, -0.7])
+_L1 = np.array([-0.2, 1.0, 0.7]) / np.linalg.norm([-0.2, 1.0, 0.7])
+
+
+def mc_light(n):
+    """바닐라 엔티티 조명과 비슷하게: 주변광 0.4 + 두 방향광 0.6."""
+    return min(1.0, 0.4 + 0.6 * (max(0.0, float(n @ _L0)) + max(0.0, float(n @ _L1))))
 
 
 def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), ss=2):
@@ -154,13 +184,13 @@ def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), 
         np.array([[math.cos(ry), 0, math.sin(ry)], [0, 1, 0], [-math.sin(ry), 0, math.cos(ry)]])
     proj = []
     allpts = []
-    for pts, uvs, tex, ctr, n in faces:
+    for pts, uvs, tex, ctr, n, glow in faces:
         q = [R @ p for p in pts]
         nn = R @ n
         if nn[2] >= -1e-6:  # 카메라는 +z 를 본다. 법선이 카메라 쪽(-z)이어야 보인다
             continue
         allpts += q
-        proj.append((q, uvs, tex, (R @ ctr)[2], n))
+        proj.append((q, uvs, tex, (R @ ctr)[2], n, glow))
     if not allpts:
         return Image.new('RGBA', (size, size), bg)
     xs = [-p[0] for p in allpts]
@@ -175,7 +205,7 @@ def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), 
         return ((-p[0] - cx) * k + W / 2, (-p[1] - cy) * k + W / 2)
 
     proj.sort(key=lambda t: -t[3])
-    for q, uvs, tex, depth, n in proj:
+    for q, uvs, tex, depth, n, glow in proj:
         img = model.textures[tex]
         iw, ih = img.size
         s = [to_screen(p) for p in q]
@@ -203,8 +233,7 @@ def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), 
             src.paste(img.crop(box), box[:2])
         tile = src.transform((bw, bh), Image.AFFINE, coeff, resample=Image.NEAREST)
         # 그림자: 면 방향에 따라 밝기
-        shade = 0.55 + 0.45 * max(0.0, n[1]) + 0.25 * abs(n[2]) + 0.12 * abs(n[0])
-        shade = min(1.0, shade if n[1] >= 0 else 0.5)
+        shade = 1.0 if glow else mc_light(n)
         arr = np.array(tile, dtype=np.float32)
         arr[..., :3] *= shade
         tile = Image.fromarray(arr.clip(0, 255).astype(np.uint8), 'RGBA')
