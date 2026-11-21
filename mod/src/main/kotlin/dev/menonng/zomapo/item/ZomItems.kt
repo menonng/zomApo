@@ -13,6 +13,7 @@ import net.minecraft.world.item.alchemy.PotionContents
 import net.minecraft.world.item.component.CustomData
 import net.minecraft.world.item.component.CustomModelData
 import net.minecraft.world.item.component.ItemLore
+import net.minecraft.world.item.component.TooltipDisplay
 import java.util.Optional
 
 /**
@@ -58,6 +59,8 @@ object ZomItems {
         set(DataComponents.CUSTOM_NAME, name("해독제", ANTIDOTE_COLOR))
         set(DataComponents.LORE, ItemLore(listOf(lore("마시면 감염이 풀린다"))))
         set(DataComponents.CUSTOM_DATA, tag(ANTIDOTE))
+        // 바닐라 물약 설명("효과 없음")을 숨긴다
+        set(DataComponents.TOOLTIP_DISPLAY, TooltipDisplay(false, linkedSetOf(DataComponents.POTION_CONTENTS)))
     }
 
     fun virusCrystal(count: Int = 1): ItemStack = ItemStack(Items.AMETHYST_SHARD, count).apply {

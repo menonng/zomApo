@@ -48,14 +48,17 @@ tasks.jar {
 }
 
 // 스모크 테스트: 전용 서버를 띄워 모드가 켜지는지 확인하고 바로 종료한다.
+// `-Psmoke=false` 면 그냥 개발 서버로 띄운다(run/server.properties 가 있으면 그대로 둔다. 화면 확인용).
+val smoke = (findProperty("smoke") as String?) != "false"
 val smokeRunDir = layout.projectDirectory.dir("run").asFile
 tasks.matching { it.name == "runServer" }.configureEach {
     (this as JavaExec).apply {
-        jvmArgs("-Dzomapo.smoke=true")
+        if (smoke) jvmArgs("-Dzomapo.smoke=true")
         doFirst {
             smokeRunDir.mkdirs()
             smokeRunDir.resolve("eula.txt").writeText("eula=true\n")
-            smokeRunDir.resolve("server.properties").writeText("online-mode=false\nlevel-type=minecraft\\:flat\nspawn-protection=0\n")
+            val props = smokeRunDir.resolve("server.properties")
+            if (smoke || !props.exists()) props.writeText("online-mode=false\nlevel-type=minecraft\\:flat\nspawn-protection=0\n")
         }
     }
 }

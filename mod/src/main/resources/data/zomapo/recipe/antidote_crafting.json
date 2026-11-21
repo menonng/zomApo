@@ -57,6 +57,11 @@
       ],
       "minecraft:custom_data": {
         "zomapo": "antidote"
+      },
+      "minecraft:tooltip_display": {
+        "hidden_components": [
+          "minecraft:potion_contents"
+        ]
       }
     }
   }
