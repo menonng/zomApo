@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""좀비화 몹 모델 만들기(디자인 2차): 미리보기 그림과 블록벤치 .bbmodel.
+"""좀비화 몹 모델 만들기(디자인 3차): 미리보기 그림과 블록벤치 .bbmodel.
 
     java ModelDump (models.json 만들기, docs/tech/architecture.md '좀비화 외형' 3-1)
     python3 build.py --models models.json --jar <마인크래프트 클라이언트 jar> --out ../out/models [--only creeper,spider]
 
 결과(저장소 제외): <out>/preview-*.png, <out>/<몹>.bbmodel, <out>/tex/<몹>_*.png
-디자인은 designs.py, 칠하기 도구는 paint.py.
+디자인은 designs3.py(2차 designs.py 위에 부패 층 rot.py 와 Mobestiary 해부도), 칠하기 도구는 paint.py.
 """
 import argparse
 import base64
@@ -23,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from zmodel import Model, jar_texture, load_models, render  # noqa: E402
 import designs as designs_mod  # noqa: E402
-from designs import DESIGNS, humanoid_overlay, tone  # noqa: E402
+from designs import humanoid_overlay, tone  # noqa: E402
+from designs3 import DESIGNS  # noqa: E402
 from paint import box_faces  # noqa: E402
 
 
@@ -64,6 +65,12 @@ def base_texture(jar, d, data, zombified):
     img = jar_texture(jar, d['texture'])
     eyes = jar_texture(jar, d['eyes']) if d.get('eyes') else None
     redraw = zombified and d['method'] in ('E', 'D')
+    if redraw and d.get('hires', 1) > 1:
+        # 작은 몹: 바탕을 2배로 키워 그 위에 칠한다(모델 UV 는 그대로, 텍스처만 고해상도)
+        k = d['hires']
+        img = img.resize((img.width * k, img.height * k), Image.NEAREST)
+        if eyes is not None:
+            eyes = eyes.resize((eyes.width * k, eyes.height * k), Image.NEAREST)
     designs_mod.SCALE[0] = max(1, img.width // data['tex'][0])
     if redraw:
         if d.get('tone'):
@@ -127,34 +134,47 @@ def make(models, jar, name, zombified):
         if keep == 'min':
             c['origin'][ai] += old - length
         c['size'][ai] = length
-    jobs = []  # (큐브, 칠하기)
+    jobs = []  # (큐브, 칠하기, 복사할 원종 큐브)
     for bone, idx, painter in d.get('retex', []):
         c = m.root.find(bone).cubes[idx]
         c.update(tex='parts', mirror=False)
         c['uv_dims'] = uv_dims(c['size'])
-        jobs.append((c, painter))
+        jobs.append((c, painter, None))
     for a in d.get('adds', []):
-        c = dict(origin=list(a['origin']), size=list(a['size']), grow=[0, 0, 0], mirror=False, uv=[0, 0], texScale=[1, 1],
-                 faces=[], tex='parts', added=True, tell=a.get('tell'), glow=a.get('glow', False))
+        c = dict(origin=list(a['origin']), size=list(a['size']), grow=list(a.get('grow') or [0, 0, 0]), mirror=False, uv=[0, 0],
+                 texScale=[1, 1], faces=[], tex='parts', added=True, tell=a.get('tell'), glow=a.get('glow', False))
         if a.get('rot'):
             c['rot'] = a['rot']
         c['uv_dims'] = uv_dims(a['size'])
         m.root.find(a['bone']).cubes.append(c)
-        jobs.append((c, a['paint']))
+        jobs.append((c, a['paint'], a.get('copy')))
     if jobs:
+        ps = int(d.get('parts_scale', 1))  # 덧붙임 텍스처 배율(작은 몹 2)
         sizes = []
-        for c, _ in jobs:
+        for c, _, _ in jobs:
             w, h, dd = c['uv_dims']
             sizes.append((max(1, 2 * (w + dd)), max(1, dd + h)))
         pos, S = pack(sizes)
-        atlas = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-        for k, ((c, painter), (x, y)) in enumerate(zip(jobs, pos)):
+        atlas = Image.new('RGBA', (S * ps, S * ps), (0, 0, 0, 0))
+        kk = max(1, m.texture.width // m.tex_size[0])
+        for k, ((c, painter, copy_src), (x, y)) in enumerate(zip(jobs, pos)):
             c['uv'] = [x, y]
             c['tex_size'] = (S, S)
             w, h, dd = c['uv_dims']
-            faces = {f: r for f, r in box_faces(x, y, w, h, dd).items() if r[2] > 0 and r[3] > 0}
+            faces = {f: (r[0] * ps, r[1] * ps, r[2] * ps, r[3] * ps) for f, r in box_faces(x, y, w, h, dd).items() if r[2] > 0 and r[3] > 0}
+            if copy_src:
+                # 머리 덮개: 원종 큐브의 면을 그대로 옮겨 온 뒤 다시 칠한다
+                src = m.root.find(copy_src[0]).cubes[copy_src[1]]
+                su, sv = src['uv']
+                sw, sh, sd = (int(round(t)) for t in src['size'])
+                sf = box_faces(int(su), int(sv), sw, sh, sd)
+                for f, r in faces.items():
+                    s0 = sf[f]
+                    crop = m.texture.crop((s0[0] * kk, s0[1] * kk, (s0[0] + s0[2]) * kk, (s0[1] + s0[3]) * kk))
+                    atlas.paste(crop.resize((r[2], r[3]), Image.NEAREST), (r[0], r[1]))
             painter(atlas, faces, 1000 + 97 * k)
         m.textures['parts'] = atlas
+        m.parts_uv = S
     if d.get('overlay_fn'):
         m.textures['overlay'] = humanoid_overlay(d['overlay_fn'])
     return m, d
@@ -178,7 +198,7 @@ def to_bbmodel(m, name):
         if key in m.textures:
             a = m.textures[key]
             tindex[key] = len(textures)
-            uvw, uvh = (64, 32) if key == 'overlay' else (a.width, a.height)
+            uvw, uvh = (64, 32) if key == 'overlay' else (getattr(m, 'parts_uv', a.width),) * 2
             textures.append({'name': f'{name}_{key}.png', 'id': str(len(textures)), 'width': a.width, 'height': a.height,
                              'uv_width': uvw, 'uv_height': uvh, 'source': _png64(a), 'uuid': str(uuid.uuid4())})
     elements = []
@@ -244,10 +264,11 @@ FONT = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 TITLE = {
     'creeper': '균사 크리퍼', 'spider': '알집 거미', 'cave_spider': '독샘 거미', 'enderman': '공허 붕괴체',
     'creaking': '창백한 썩음(크리킹)', 'slime': '늪 찌꺼기(슬라임)', 'magma_cube': '혼불 큐브(마그마 큐브)',
-    'phantom': '누더기 팬텀', 'guardian': '따개비 가디언', 'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트',
-    'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골', 'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)',
-    'wither_skeleton': '진홍 균류 해골(위더 스켈레톤)', 'piglin_brute': '진홍 브루트', 'pillager': '부패 약탈자',
-    'vindicator': '부패 변명자', 'evoker': '부패 소환사', 'illusioner': '부패 환술사', 'witch': '역병 마녀', 'shulker': '부패 셜커',
+    'phantom': '시체 운반자(팬텀)', 'guardian': '익사체 지휘관(가디언)', 'elder_guardian': '썩은 장로(엘더 가디언)',
+    'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트', 'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골',
+    'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)', 'wither_skeleton': '진홍 해골(위더 스켈레톤)',
+    'piglin_brute': '진홍 브루트', 'pillager': '표식 약탈자', 'vindicator': '도끼잡이(변명자)', 'evoker': '강령 소환사',
+    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '중력 셜커', 'ravager': '썩은 파괴수',
 }
 METHOD = {'E': '리그', 'B': '장비 덧씌움 + 머리 아이템 (몸 텍스처는 바닐라)', 'C': '머리 아이템 (몸 텍스처는 바닐라)', 'D': '색 변형 텍스처'}
 
@@ -266,9 +287,10 @@ def preview_sheet(models, jar, names, out_path, cell=300):
         tiles = [render(o, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw + 180, pitch=pitch)]
         for i, t in enumerate(tiles):
             sheet.alpha_composite(t, (i * cell, y + 34))
-        dr.text((10, y + 4), f'{TITLE.get(name, name)}  ·  {METHOD[d["method"]]}  —  원종 / 좀비화 앞 / 뒤', font=font, fill=(235, 235, 235))
+        hires = '  ·  텍스처 2배' if d.get('hires', 1) > 1 else ''
+        dr.text((10, y + 4), f'{TITLE.get(name, name)}  ·  {METHOD[d["method"]]}{hires}  —  원종 / 좀비화 앞 / 뒤', font=font, fill=(235, 235, 235))
         dr.text((10, y + cell + 12), d.get('concept', ''), font=small, fill=(205, 205, 205))
-        tell = next((a.get('tell') for a in d.get('adds', []) if a.get('tell')), None)
+        tell = next((a.get('tell') for a in d.get('adds', []) if a.get('tell')), d.get('tell'))
         if tell:
             dr.text((10, y + cell + 32), '신호: ' + tell, font=small, fill=(160, 200, 160))
     sheet.convert('RGB').save(out_path)
