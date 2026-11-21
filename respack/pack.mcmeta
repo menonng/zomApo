@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "zomApo 서버 리소스팩",
+    "min_format": 97,
+    "max_format": 97
+  }
+}

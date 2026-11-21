@@ -1,0 +1,48 @@
+{
+  "type": "minecraft:brewing",
+  "input": {
+    "item": "minecraft:potion",
+    "potion_contents": {
+      "potions": "minecraft:awkward"
+    }
+  },
+  "reagent": {
+    "item": {
+      "fabric:type": "fabric:components",
+      "base": "minecraft:amethyst_shard",
+      "components": {
+        "minecraft:custom_data": {
+          "zomapo": "virus_crystal"
+        }
+      }
+    }
+  },
+  "output": {
+    "id": "minecraft:potion",
+    "components": {
+      "minecraft:potion_contents": {
+        "custom_color": 5618500
+      },
+      "minecraft:custom_model_data": {
+        "strings": [
+          "zomapo:antidote"
+        ]
+      },
+      "minecraft:custom_name": {
+        "text": "해독제",
+        "color": "#55BB44",
+        "italic": false
+      },
+      "minecraft:lore": [
+        {
+          "text": "마시면 감염이 풀린다",
+          "color": "gray",
+          "italic": false
+        }
+      ],
+      "minecraft:custom_data": {
+        "zomapo": "antidote"
+      }
+    }
+  }
+}

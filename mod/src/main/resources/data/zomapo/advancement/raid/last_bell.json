@@ -1,0 +1,26 @@
+{
+  "parent": "zomapo:raid/rotten_banner",
+  "display": {
+    "icon": {
+      "id": "minecraft:bell"
+    },
+    "title": {
+      "text": "마지막 종"
+    },
+    "description": {
+      "text": "습격 징조 V 단계의 좀비화 습격에서 이겨라"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "criteria": {
+    "won": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "rewards": {
+    "experience": 100
+  }
+}
