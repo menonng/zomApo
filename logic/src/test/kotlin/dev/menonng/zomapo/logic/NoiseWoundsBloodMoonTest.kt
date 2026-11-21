@@ -130,3 +130,23 @@ class BloodMoonAndAfkTest {
         repeat(200) { i -> Horde.attempt(Random(i), d)?.let { assertTrue(it.target != "c") } }
     }
 }
+
+class BloodMoonTargetTest {
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("블러드문 습격 지점: 수도 셋이 후보면 캠프 약 40%, 수도 각 약 20%. 지킬 사람 없는 수도는 빠지고, 아무도 없으면 캠프")
+    fun case01() {
+        val r = kotlin.random.Random(3)
+        val caps = listOf("n1", "n2", "n3")
+        val n = 50_000
+        val count = HashMap<String, Int>()
+        repeat(n) { val t = BloodMoon.pickTarget(r, caps); count[t] = (count[t] ?: 0) + 1 }
+        assertEquals(0.4, count[BloodMoon.CAMP]!! / n.toDouble(), 0.01)
+        for (c in caps) assertEquals(0.2, count[c]!! / n.toDouble(), 0.01)
+        assertEquals(BloodMoon.CAMP, BloodMoon.pickTarget(r, emptyList()))
+        assertTrue(BloodMoon.waveHeld(1, 1))
+        assertTrue(!BloodMoon.waveHeld(0, 80))
+        assertTrue(!BloodMoon.waveHeld(4, 0))
+        assertEquals(2, BloodMoon.spawnLevel(0))
+        assertEquals(4, BloodMoon.spawnLevel(4))
+    }
+}
