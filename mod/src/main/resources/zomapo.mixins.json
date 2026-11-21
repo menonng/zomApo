@@ -3,6 +3,6 @@
   "minVersion": "0.8",
   "package": "dev.menonng.zomapo.mixin",
   "compatibilityLevel": "JAVA_25",
-  "mixins": ["ConsumableMixin", "FoodDataMixin", "IngredientMixin"],
+  "mixins": ["ConsumableMixin", "DisplayInvoker", "FoodDataMixin", "IngredientMixin", "ItemDisplayInvoker", "PhantomRiderMixin"],
   "injectors": { "defaultRequire": 1 }
 }

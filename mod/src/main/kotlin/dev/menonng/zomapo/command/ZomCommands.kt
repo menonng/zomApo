@@ -28,7 +28,8 @@ object ZomCommands {
             dispatcher.register(
                 Commands.literal("zomapo").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                     .then(effect())
-                    .then(give()),
+                    .then(give())
+                    .then(debug()),
             )
         }
     }
@@ -100,5 +101,59 @@ object ZomCommands {
         }
         ctx.source.sendSuccess({ Component.literal("지급: ${list.size}명") }, true)
         return list.size
+    }
+
+    /**
+     * 기믹 시험(운영자): 실행한 사람 앞에 좀비화 몹을 만든다.
+     * - `/zomapo debug enderman` : 16블록 앞에 공허 붕괴체, 실행자를 노리고 공허 강림을 바로 쓸 수 있는 상태
+     * - `/zomapo debug phantom` : 머리 위 14블록에 좀비를 태운 시체 운반자
+     * - `/zomapo debug phantom empty` : 빈 시체 운반자(이번 급강하에 꼭 줍는다) + 앞에 좀비 하나
+     */
+    private fun debug(): LiteralArgumentBuilder<CommandSourceStack> =
+        Commands.literal("debug")
+            .then(Commands.literal("enderman").executes { ctx ->
+                val p = ctx.source.playerOrException
+                val level = p.level()
+                val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+                val e = net.minecraft.world.entity.EntityTypes.ENDERMAN.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+                val x = p.x + look.x * 16
+                val z = p.z + look.z * 16
+                val y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt()).toDouble()
+                e.snapTo(x, y, z, p.yRot + 180f, 0f)
+                e.setPersistenceRequired()
+                level.addFreshEntity(e)
+                dev.menonng.zomapo.gimmick.Zombified.mark(e, 2)
+                e.target = p
+                dev.menonng.zomapo.gimmick.VoidDescent.armNow(e)
+                ctx.source.sendSuccess({ Component.literal("공허 붕괴체 생성") }, false)
+                1
+            })
+            .then(Commands.literal("phantom")
+                .executes { ctx -> spawnCarrier(ctx, empty = false) }
+                .then(Commands.literal("empty").executes { ctx -> spawnCarrier(ctx, empty = true) }))
+
+    private fun spawnCarrier(ctx: CommandContext<CommandSourceStack>, empty: Boolean): Int {
+        val p = ctx.source.playerOrException
+        val level = p.level()
+        val ph = net.minecraft.world.entity.EntityTypes.PHANTOM.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        ph.snapTo(p.x + 6, p.y + 14, p.z + 6, 0f, 0f)
+        ph.setPersistenceRequired()
+        level.addFreshEntity(ph)
+        dev.menonng.zomapo.gimmick.Zombified.mark(ph, 2)
+        ph.target = p
+        val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+        val z = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        z.setPersistenceRequired()
+        if (empty) {
+            z.snapTo(p.x + look.x * 8, p.y, p.z + look.z * 8, 0f, 0f)
+            level.addFreshEntity(z)
+            dev.menonng.zomapo.gimmick.CorpseCarrier.forcePickup(ph)
+        } else {
+            z.snapTo(ph.x, ph.y + 1, ph.z, 0f, 0f)
+            level.addFreshEntity(z)
+            z.startRiding(ph, true, true)
+        }
+        ctx.source.sendSuccess({ Component.literal(if (empty) "빈 시체 운반자 생성" else "시체 운반자 생성") }, false)
+        return 1
     }
 }

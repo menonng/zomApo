@@ -104,6 +104,9 @@ object GimmickRules {
     const val DESCENT_MAX = 24.0
     const val DESCENT_CHANNEL_TICKS = 30
     const val DESCENT_SWARM_TICKS = 40
+    const val DESCENT_RADIUS = 3.0
+    const val DESCENT_DAMAGE = 1.0f
+    const val DESCENT_DARKNESS_TICKS = 60
 
     // 시선이 끊길 때마다 가속(창백한 썩음): 겹당 +12%, 최대 3겹, 6초
     const val CREAK_STACK_SPEED = 0.12

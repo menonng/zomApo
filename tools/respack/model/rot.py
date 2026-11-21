@@ -219,23 +219,27 @@ def sick_eyes(img, rect, test, rp=SICK_EYE):
         put(img, x, y, pick(rp, 0.55 + lum(c) * 0.5, x, y))
 
 
-def zombie_face(img, faces, seed, skin=ZSKIN, wound_side='left', eye_test=None):
+def zombie_face(img, faces, seed, skin=None, wound_side='left', eye_test=None, wounds=True):
     """C 방식 머리 덮개: 바닐라 머리 면을 그대로 옮긴 뒤 좀비 주민처럼 다시 칠한다.
-    밝은 살빛 → 좀비 살빛(명암 유지), 눈의 흰자 → 병든 빛, 한쪽 뺨에 찢긴 상처."""
+    픽셀마다 명암(밝기)은 그대로 두고 색만 좀비 녹색 쪽으로 돌린다. 디더링을 쓰지 않아 바닐라 얼굴의 눈·눈썹·입이 또렷하게 남는다.
+    눈 흰자는 병든 빛, 머리 덮개에만 한쪽 뺨 상처(코에는 그리지 않음)."""
     for face, (x0, y0, w, h) in faces.items():
         for y in range(y0, y0 + h):
             for x in range(x0, x0 + w):
                 c = get(img, x, y)
                 if c[3] == 0:
                     continue
-                hh, s, v = colorsys.rgb_to_hsv(c[0] / 255, c[1] / 255, c[2] / 255)
-                L = lum(c)
                 if eye_test and face == 'front' and eye_test(c):
-                    put(img, x, y, pick(SICK_EYE, 0.7, x, y))
-                elif L > 0.12:
-                    put(img, x, y, pick(skin, min(1.0, L * 1.45), x, y))
-                else:
-                    put(img, x, y, mix(c, skin[0], 0.4))
+                    put(img, x, y, SICK_EYE[3])
+                    continue
+                hh, s, v = colorsys.rgb_to_hsv(c[0] / 255, c[1] / 255, c[2] / 255)
+                hh = 0.25                                  # 누런 녹색(좀비 주민 살빛 쪽)
+                s = min(0.55, 0.22 + s * 0.6)
+                v = v * 0.86
+                r, g, b = colorsys.hsv_to_rgb(hh, s, v)
+                put(img, x, y, (int(r * 255), int(g * 255), int(b * 255), c[3]))
+    if not wounds:
+        return
     f = faces.get('front')
     if f and f[2] >= 4 and f[3] >= 4:
         cx = f[0] + (f[2] * 0.28 if wound_side == 'left' else f[2] * 0.72)

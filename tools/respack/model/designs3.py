@@ -342,10 +342,11 @@ def _eye_white(c):
 def zhead_adds(seed_side='left', skin=None, nose=True):
     skin = skin or ramp('#2B3326', '#3D4836', '#53614A', '#6B7A5F', '#869478', '#A2AE93')
     face = lambda img, faces, seed: R.zombie_face(img, faces, seed, skin=skin, wound_side=seed_side, eye_test=_eye_white)
+    nose_face = lambda img, faces, seed: R.zombie_face(img, faces, seed, skin=skin, eye_test=None, wounds=False)
     out = [dict(bone='head', origin=[-4.0, -10.0, -4.0], size=[8, 10, 8], paint=face, copy=('head', 0), grow=[0.3, 0.3, 0.3],
                 tell=None, glow=False, rot=None, name='zombie_head')]
     if nose:
-        out.append(dict(bone='nose', origin=[-1.0, -1.0, -6.0], size=[2, 4, 2], paint=face, copy=('nose', 0), grow=[0.25, 0.25, 0.25],
+        out.append(dict(bone='nose', origin=[-1.0, -1.0, -6.0], size=[2, 4, 2], paint=nose_face, copy=('nose', 0), grow=[0.25, 0.25, 0.25],
                         tell=None, glow=False, rot=None, name='zombie_nose'))
     return out
 
