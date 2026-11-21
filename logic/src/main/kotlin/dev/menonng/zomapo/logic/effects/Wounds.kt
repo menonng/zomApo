@@ -100,8 +100,8 @@ object Antidote {
     const val CRYSTAL_MODEL = "zomapo:virus_crystal"
     /** 물약 이름 키 접미사: 클라이언트는 item.minecraft.potion.effect.<이것> 을 리소스팩 언어 파일에서 찾는다. */
     const val POTION_NAME = "zomapo_antidote"
-    /** 물약 색. 그림의 약물 층이 바닐라 물약처럼 이 색으로 물든다. */
-    const val COLOR = 0xFFC93C
+    /** 물약 색(마실 때 입자 색). 그림은 고유 텍스처라 이 값에 물들지 않는다. */
+    const val COLOR = 0xE2B23A
     const val EFFECT_KEY = "effect.zomapo.cure_infection"
 
     /** 제작대(모양 없음): 꿀병 + 반짝이는 수박 조각|황금 당근 + 썩은 살 → 해독제 1 */

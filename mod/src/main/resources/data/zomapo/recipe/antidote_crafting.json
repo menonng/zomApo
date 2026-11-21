@@ -14,7 +14,7 @@
     "count": 1,
     "components": {
       "minecraft:potion_contents": {
-        "custom_color": 16763196,
+        "custom_color": 14856762,
         "custom_name": "zomapo_antidote"
       },
       "minecraft:custom_model_data": {
