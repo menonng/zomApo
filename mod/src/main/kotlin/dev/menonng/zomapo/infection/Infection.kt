@@ -103,6 +103,7 @@ object Infection {
         val nations = NationBridge.nations()
         nationLevels = nations.associate { n -> n.id to model.territoryLevel(ramp, activity(n.members, n.id, now), eventPurify(n.id, now) - globalTemp) }
         claims = nations.associate { n -> n.id to n.claims.groupBy({ it.first }, { intArrayOf(it.second, it.third) }) }
+        dev.menonng.zomapo.ai.ZombieBrain.refreshCores()
     }
 
     /** 청크 레벨(소수). [x],[z] 는 블록 좌표. */

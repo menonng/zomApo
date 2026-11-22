@@ -132,6 +132,47 @@ internal object ZomSmoke {
         z4.hurtServer(level, level.damageSources().playerAttack(killer), 1000f)
         if (inf.score(killer.uuid) <= before) f += "좀비 처치 점수가 오르지 않음"
         z4.discard()
+        f += aiChecks(server)
+        return f
+    }
+
+    /** 좀비 지능: 부술 수 있는 블록, 부숴서 손에 들기, 꺼내 쌓기, 문 열기. */
+    private fun aiChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        val brain = dev.menonng.zomapo.ai.ZombieBrain
+        val ai = dev.menonng.zomapo.logic.spawn.ZombieAi
+        val o = net.minecraft.core.BlockPos(5100, 150, 5100)
+        level.getChunk(o)
+        fun set(p: net.minecraft.core.BlockPos, b: net.minecraft.world.level.block.Block) = level.setBlockAndUpdate(p, b.defaultBlockState())
+        set(o, net.minecraft.world.level.block.Blocks.DIRT); set(o.east(), net.minecraft.world.level.block.Blocks.STONE); set(o.east(2), net.minecraft.world.level.block.Blocks.OBSIDIAN); set(o.east(3), net.minecraft.world.level.block.Blocks.OAK_PLANKS)
+        if (!brain.breakable(level, o, ai.profile(3), false)) f += "Lv3 이 흙을 못 부숨"
+        if (brain.breakable(level, o.east(), ai.profile(5), false)) f += "일반 좀비가 돌을 부숨"
+        if (brain.breakable(level, o.east(3), ai.profile(3), false)) f += "Lv3 이 나무판을 부숨"
+        if (!brain.breakable(level, o.east(3), ai.profile(4), false)) f += "Lv4 가 나무판을 못 부숨"
+        if (!brain.breakable(level, o.east(), ai.diggerProfile(3), true)) f += "굴착꾼이 돌을 못 팜"
+        if (brain.breakable(level, o.east(2), ai.diggerProfile(3), true)) f += "굴착꾼이 흑요석을 팜"
+        val z = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        z.snapTo(o.x + 0.5, o.y + 1.0, o.z + 0.5, 0f, 0f)
+        level.addFreshEntity(z)
+        brain.breakAndCarry(level, z, o, level.getBlockState(o), ai.profile(4))
+        if (!level.getBlockState(o).isAir) f += "부순 흙이 남음"
+        if (brain.carried(z) != 1) f += "부순 흙을 손에 들지 않음: ${brain.carried(z)}"
+        brain.placeCarried(level, z, o.above(3))
+        if (!level.getBlockState(o.above(3)).`is`(net.minecraft.world.level.block.Blocks.DIRT)) f += "들고 있던 흙을 쌓지 않음"
+        if (brain.carried(z) != 0) f += "쌓은 뒤에도 블록이 남음"
+        // 문: 닫힌 참나무 문 너머의 대상 → 연다
+        val d = o.offset(0, 10, 0)
+        for (dx in -1..1) for (dz in -1..1) set(d.offset(dx, -1, dz), net.minecraft.world.level.block.Blocks.STONE)
+        val door = net.minecraft.world.level.block.Blocks.OAK_DOOR.defaultBlockState()
+        level.setBlock(d.east(), door, 3)
+        level.setBlock(d.east().above(), door.setValue(net.minecraft.world.level.block.DoorBlock.HALF, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER), 3)
+        z.snapTo(d.x + 0.5, d.y.toDouble(), d.z + 0.5, 0f, 0f)
+        val v = net.minecraft.world.entity.EntityTypes.VILLAGER.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        v.snapTo(d.x + 3.5, d.y.toDouble(), d.z + 0.5, 0f, 0f); level.addFreshEntity(v)
+        brain.tryDoor(level, z, v, dev.menonng.zomapo.ai.ZombieBrain.St(), System.currentTimeMillis())
+        if (level.getBlockState(d.east()).getValue(net.minecraft.world.level.block.DoorBlock.OPEN) != true) f += "Lv2 좀비가 참나무 문을 열지 않음"
+        z.discard(); v.discard()
         return f
     }
 }

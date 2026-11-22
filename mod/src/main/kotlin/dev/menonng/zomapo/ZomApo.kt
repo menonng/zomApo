@@ -19,6 +19,7 @@ object ZomApo : ModInitializer {
         ZomCommands.register()
         Zombified.register()
         dev.menonng.zomapo.infection.Infection.register()
+        dev.menonng.zomapo.ai.ZombieBrain.register()
         ServerLifecycleEvents.SERVER_STARTED.register { server ->
             if (System.getProperty("zomapo.smoke") == "true") {
                 val failures = ZomSmoke.run(server)
