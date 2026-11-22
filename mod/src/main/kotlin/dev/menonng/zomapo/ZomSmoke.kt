@@ -133,6 +133,45 @@ internal object ZomSmoke {
         if (inf.score(killer.uuid) <= before) f += "좀비 처치 점수가 오르지 않음"
         z4.discard()
         f += aiChecks(server)
+        f += revenantChecks(server)
+        return f
+    }
+
+    /** 망자: 좀비에게 죽으면 장부에 소지품, 망자 생성, 남의 피해 무시, 주인이 잡으면 되돌려 줌. */
+    private fun revenantChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        val rs = dev.menonng.zomapo.death.RevenantSystem
+        val pos = net.minecraft.core.BlockPos(5200, 120, 5200)
+        level.getChunk(pos)
+        for (dx in -3..3) for (dz in -3..3) level.setBlockAndUpdate(pos.offset(dx, -1, dz), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
+        val owner = net.fabricmc.fabric.api.entity.FakePlayer.get(level, com.mojang.authlib.GameProfile(java.util.UUID.nameUUIDFromBytes("zomapo-rev".toByteArray()), "zomapo_rev"))
+        val other = net.fabricmc.fabric.api.entity.FakePlayer.get(level, com.mojang.authlib.GameProfile(java.util.UUID.nameUUIDFromBytes("zomapo-rev2".toByteArray()), "zomapo_rev2"))
+        owner.setAttached(rs.STASH, null)
+        owner.snapTo(pos.x + 0.5, pos.y.toDouble(), pos.z + 0.5, 0f, 0f)
+        owner.setHealth(20f)
+        owner.inventory.clearContent()
+        owner.inventory.add(net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 5))
+        val killer = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        killer.snapTo(pos.x + 2.5, pos.y.toDouble(), pos.z + 0.5, 0f, 0f); level.addFreshEntity(killer)
+        // Fabric FakePlayer 는 피해를 받지 않으므로, 죽음의 드랍 처리(dropAllDeathLoot 믹스인)를 직접 부른다
+        rs.beforeDeathLoot(owner, level, level.damageSources().mobAttack(killer))
+        killer.discard()
+        val entries = rs.entries(owner)
+        if (entries.size != 1) f += "좀비에게 죽었는데 망자 장부가 ${entries.size}개"
+        if (entries.firstOrNull()?.items?.sumOf { it.count } != 5) f += "망자 장부의 소지품이 다이아몬드 5개가 아님"
+        if (owner.inventory.contains { it.`is`(net.minecraft.world.item.Items.DIAMOND) }) f += "죽은 뒤 인벤토리에 소지품이 남음"
+        val rev = level.getEntitiesOfClass(net.minecraft.world.entity.monster.zombie.Zombie::class.java, net.minecraft.world.phys.AABB(pos).inflate(8.0)) { rs.isRevenant(it) }.firstOrNull()
+        if (rev == null) { f += "망자 엔티티가 생기지 않음"; return f }
+        val hp = rev.health
+        rev.hurtServer(level, level.damageSources().playerAttack(other), 10f)
+        if (rev.health < hp) f += "남이 망자에게 피해를 줌"
+        rev.hurtServer(level, level.damageSources().playerAttack(owner), 1000f)
+        if (rev.isAlive) f += "주인이 쳐도 망자가 쓰러지지 않음"
+        if (rs.entries(owner).isNotEmpty()) f += "망자를 잡은 뒤에도 장부가 남음"
+        val drops = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity::class.java, net.minecraft.world.phys.AABB(pos).inflate(8.0)) { it.item.`is`(net.minecraft.world.item.Items.DIAMOND) }
+        if (drops.sumOf { it.item.count } != 5) f += "망자가 다이아몬드 5개를 떨어뜨리지 않음: ${drops.sumOf { it.item.count }}"
+        drops.forEach { it.discard() }
         return f
     }
 

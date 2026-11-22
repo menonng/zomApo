@@ -198,7 +198,7 @@ object SpawnLevels {
     /** 좀비 처치 점수(플레이어 시스템 '좀비 통계'): 개인 스코어와 국가 열기용 기본 스코어. */
     private fun onDeath(victim: LivingEntity, source: net.minecraft.world.damagesource.DamageSource) {
         val m = victim as? Mob ?: return
-        if (!isZombieLike(m)) return
+        if (!isZombieLike(m) || dev.menonng.zomapo.death.RevenantSystem.isRevenant(m)) return     // 망자는 점수 없음
         val killer = (source.entity as? ServerPlayer) ?: (m.killCredit as? ServerPlayer) ?: return
         val base = if (m is Zombie || m is Zoglin) m.getAttached(dev.menonng.zomapo.infection.VariantTag.BASE_SCORE) ?: 1.0 else 2.0
         val now = System.currentTimeMillis()
