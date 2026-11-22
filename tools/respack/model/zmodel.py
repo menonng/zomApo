@@ -204,18 +204,22 @@ def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), 
     def to_screen(p):
         return ((-p[0] - cx) * k + W / 2, (-p[1] - cy) * k + W / 2)
 
+    # 깊이 버퍼(게임과 같은 방식): 픽셀마다 가장 가까운 불투명 면만 남긴다. 반투명 픽셀은 먼 것부터 섞는다.
+    # (예전의 면 중심 깊이 정렬은 덮개 위에 바짝 붙은 띠처럼 크기가 다른 면이 겹치면 순서가 틀렸다)
     proj.sort(key=lambda t: -t[3])
+    col = np.zeros((W, W, 4), dtype=np.float32)
+    zbuf = np.full((W, W), np.inf, dtype=np.float32)
     for q, uvs, tex, depth, n, glow in proj:
         img = model.textures[tex]
         iw, ih = img.size
         s = [to_screen(p) for p in q]
         t = [(u * iw, v * ih) for (u, v) in uvs]
-        # 화면 → 텍스처 아핀(점 0,1,3)
         A = np.array([[s[0][0], s[0][1], 1], [s[1][0], s[1][1], 1], [s[3][0], s[3][1], 1]])
         if abs(np.linalg.det(A)) < 1e-6:
             continue
         bx = np.linalg.solve(A, np.array([t[0][0], t[1][0], t[3][0]]))
         by = np.linalg.solve(A, np.array([t[0][1], t[1][1], t[3][1]]))
+        bz = np.linalg.solve(A, np.array([q[0][2], q[1][2], q[3][2]]))
         x0, y0 = int(min(p[0] for p in s)) - 1, int(min(p[1] for p in s)) - 1
         x1, y1 = int(max(p[0] for p in s)) + 2, int(max(p[1] for p in s)) + 2
         x0, y0 = max(0, x0), max(0, y0)
@@ -224,22 +228,34 @@ def render(model, size=480, yaw=-35.0, pitch=22.0, scale=None, bg=(0, 0, 0, 0), 
             continue
         bw, bh = x1 - x0, y1 - y0
         coeff = (bx[0], bx[1], bx[0] * x0 + bx[1] * y0 + bx[2], by[0], by[1], by[0] * x0 + by[1] * y0 + by[2])
-        # 텍스처 경계 밖을 투명으로: 면이 쓰는 uv 사각형만 남긴다
         umin, umax = min(a for a, b in t), max(a for a, b in t)
         vmin, vmax = min(b for a, b in t), max(b for a, b in t)
         src = Image.new('RGBA', img.size, (0, 0, 0, 0))
         box = (int(round(umin)), int(round(vmin)), int(round(umax)), int(round(vmax)))
         if box[2] > box[0] and box[3] > box[1]:
             src.paste(img.crop(box), box[:2])
-        tile = src.transform((bw, bh), Image.AFFINE, coeff, resample=Image.NEAREST)
-        # 그림자: 면 방향에 따라 밝기
+        tile = np.array(src.transform((bw, bh), Image.AFFINE, coeff, resample=Image.NEAREST), dtype=np.float32)
         shade = 1.0 if glow else mc_light(n)
-        arr = np.array(tile, dtype=np.float32)
-        arr[..., :3] *= shade
-        tile = Image.fromarray(arr.clip(0, 255).astype(np.uint8), 'RGBA')
+        tile[..., :3] *= shade
         mask = Image.new('L', (bw, bh), 0)
         ImageDraw.Draw(mask).polygon([(p[0] - x0, p[1] - y0) for p in s], fill=255, outline=255)
-        a = np.minimum(np.array(mask), np.array(tile)[..., 3])
-        tile.putalpha(Image.fromarray(a.astype(np.uint8)))
-        canvas.alpha_composite(tile, (x0, y0))
+        m = np.array(mask) > 0
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        z = (bz[0] * (xx + 0.5) + bz[1] * (yy + 0.5) + bz[2]).astype(np.float32) - 1e-3
+        a = tile[..., 3]
+        zb = zbuf[y0:y1, x0:x1]
+        cb = col[y0:y1, x0:x1]
+        opaque = m & (a >= 200) & (z < zb)
+        cb[opaque] = tile[opaque]
+        zb[opaque] = z[opaque]
+        semi = m & (a > 0) & (a < 200) & (z < zb)
+        if semi.any():
+            al = (a[semi] / 255.0)[:, None]
+            cb[semi, :3] = tile[semi, :3] * al + cb[semi, :3] * (1 - al)
+            cb[semi, 3] = np.maximum(cb[semi, 3], a[semi])
+    canvas = Image.fromarray(col.clip(0, 255).astype(np.uint8), 'RGBA')
+    if bg != (0, 0, 0, 0):
+        b = Image.new('RGBA', (W, W), bg)
+        b.alpha_composite(canvas)
+        canvas = b
     return canvas.resize((size, size), Image.LANCZOS) if ss > 1 else canvas

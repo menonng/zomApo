@@ -51,7 +51,7 @@ enum class Gimmick(val mob: String, val title: String, val skill: String, val in
     ENDERMAN("enderman", "공허 붕괴체", "공허 강림", Interval.seconds(15.0, 30.0)),
     CREAKING("creaking", "창백한 썩음", "늦은 굳기 · 시선이 끊길 때마다 가속", null),
     SLIME("slime", "늪 찌꺼기", "재결합 · 끈적한 착지", Interval.seconds(4.0, 7.0)),
-    MAGMA_CUBE("magma_cube", "혼불 큐브", "재결합 · 혼불 착지", Interval.seconds(4.0, 7.0)),
+    MAGMA_CUBE("magma_cube", "부패 마그마 큐브", "재결합 · 불씨 착지", Interval.seconds(4.0, 7.0)),
     PHANTOM("phantom", "시체 운반자", "좀비화 몹 수송·투하", null),
     SILVERFISH("silverfish", "광산 좀벌레", "갉아먹기", null),
     ENDERMITE("endermite", "깜빡 진드기", "깜빡임", Interval.seconds(3.0, 6.0)),
@@ -147,7 +147,7 @@ object GimmickRules {
     const val PUDDLE_RADIUS = 1.5
     const val PUDDLE_TICKS = 80
 
-    // 혼불 큐브: 착지 때 껍질 틈으로 혼불 불씨(Mobestiary). 반경 2.5, 불 2초
+    // 부패 마그마 큐브: 착지 때 껍질 틈으로 불씨(Mobestiary). 반경 2.5, 불 2초
     const val EMBER_RADIUS = 2.5
     const val EMBER_FIRE_TICKS = 40
 

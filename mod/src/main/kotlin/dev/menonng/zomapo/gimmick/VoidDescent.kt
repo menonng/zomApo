@@ -15,14 +15,19 @@ import net.minecraft.sounds.SoundSource
 import net.minecraft.util.Brightness
 import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.effect.MobEffects
+import dev.menonng.zomapo.rig.EndermanRig
+import dev.menonng.zomapo.rig.Pose
+import dev.menonng.zomapo.rig.RigInstance
+import net.minecraft.resources.Identifier
 import net.minecraft.world.entity.Display
+import net.minecraft.world.entity.ai.attributes.AttributeModifier
+import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntityTypes
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Enderman
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
-import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.Vec3
 import org.joml.Quaternionf
@@ -34,7 +39,8 @@ import kotlin.random.Random
 
 /**
  * 공허 붕괴체(좀비화 엔더맨) — 공허 강림. docs/design/zombies.md '몹 좀비화' 3절.
- * 화난 상태에서 대상이 8~24블록에 보이면 1.5초 집중(팔을 들고 공허 조각이 몸 둘레를 돌며 빨려 든다)
+ * 화난 상태에서 대상이 8~24블록에 보이면 1.5초 집중(피들스틱 궁극기처럼 상체를 젖히고 팔을 크게 벌리며 떠오르고,
+ * 가슴 구멍 속 공허 핵이 커지고, 공허 조각이 등 뒤로 날개처럼 펼쳐진다. 자세는 리그 EndermanRig)
  * → 대상 바로 앞(엔더맨 쪽 2.5블록)으로 순간이동 → 반경 3 공허 소용돌이 2초(0.5초마다 피해 1, 어둠 3초).
  * 집중이 끝날 때 시야가 끊겼으면 실패. 간격은 15~30초에서 매번 무작위.
  */
@@ -47,18 +53,27 @@ object VoidDescent {
         var saved: BlockState? = null
         var anchor: Vec3 = Vec3.ZERO
         val shards = mutableListOf<Display.ItemDisplay>()
+        var core: Display.ItemDisplay? = null
     }
+    private val SHRINK = Identifier.fromNamespaceAndPath("zomapo", "void_channel")
 
     private val states = WeakHashMap<Enderman, State>()
     private val random = Random.Default
     private val interval = Gimmick.ENDERMAN.interval!!
     private val VOID_DUST = DustParticleOptions(0x6A26A0, 1.2f)
     private val DARK_DUST = DustParticleOptions(0x16061F, 1.6f)
+    private val WING_DUST = DustParticleOptions(0x2A1440, 0.9f)
     private const val SHARDS = 7
 
     fun forget(mob: Mob) {
         (mob as? Enderman)?.let { e -> states.remove(e)?.let { clear(e, it) } }
     }
+
+    /** 리그용: 집중 진행도 0~1(집중 중이 아니면 null). */
+    fun channelProgress(e: Enderman): Float? = states[e]?.takeIf { it.phase == Phase.CHANNEL }?.let { it.t / GimmickRules.DESCENT_CHANNEL_TICKS.toFloat() }
+
+    /** 리그용: 순간이동 직후 0.5초 진행도. */
+    fun burstProgress(e: Enderman): Float? = states[e]?.takeIf { it.phase == Phase.SWARM && it.t < 10 }?.let { it.t / 10f }
 
     /** 운영자 시험용: 다음 틱에 바로 쓸 수 있게. */
     fun armNow(e: Enderman) {
@@ -78,8 +93,13 @@ object VoidDescent {
                     s.t = 0
                     s.anchor = e.position()
                     s.saved = e.carriedBlock
-                    e.setCarriedBlock(Blocks.STRUCTURE_VOID.defaultBlockState()) // 보이지 않는 블록을 드는 자세 = 팔을 앞으로 든다
+                    e.setCarriedBlock(null)
+                    // 투명한 진짜 엔더맨을 집중 동안 아주 작게: 젖힌 리그 머리와 어긋나는 바닐라 눈 레이어가 보이지 않게
+                    e.getAttribute(Attributes.SCALE)?.let { a -> if (a.getModifier(SHRINK) == null) a.addTransientModifier(AttributeModifier(SHRINK, -0.9375, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL)) }
                     spawnShards(level, e, s)
+                    s.core = RigInstance.spawnDisplay(level, e.position(), Identifier.fromNamespaceAndPath("zomapo", "rig/void_core")).also {
+                        (it as DisplayInvoker).`zomapo$setBrightnessOverride`(Brightness(15, 15))
+                    }
                     level.playSound(null, e.x, e.y, e.z, SoundEvents.ENDERMAN_STARE, SoundSource.HOSTILE, 2.5f, 0.7f)
                     level.playSound(null, e.x, e.y, e.z, SoundEvents.PORTAL_TRIGGER, SoundSource.HOSTILE, 0.8f, 1.6f)
                 }
@@ -89,7 +109,9 @@ object VoidDescent {
                 e.navigation.stop()
                 if (target != null) e.lookControl.setLookAt(target, 30f, 30f)
                 val progress = s.t / GimmickRules.DESCENT_CHANNEL_TICKS.toDouble()
-                orbit(s, e.position().add(0.0, 1.6, 0.0), radius = 2.2 - 1.4 * progress, speed = 0.18 + 0.25 * progress, now)
+                if (EndermanRig.hasRig(e)) {
+                    wings(level, e, s, progress, now)     // 리그가 있으면 decorate 가 핵을, 여기서는 날개를
+                } else orbit(s, e.position().add(0.0, 1.6, 0.0), radius = 2.2 - 1.4 * progress, speed = 0.18 + 0.25 * progress, now)
                 converge(level, e.position().add(0.0, 1.5, 0.0), 2.4 - progress)
                 if (e.position().distanceTo(s.anchor) > 4.0) { finish(e, s, now, failed = true); return } // 맞고 피해 순간이동 = 끊김
                 if (s.t >= GimmickRules.DESCENT_CHANNEL_TICKS) {
@@ -97,7 +119,11 @@ object VoidDescent {
                     val toward = e.position().subtract(target.position()).let { Vec3(it.x, 0.0, it.z) }.normalize()
                     val dest = target.position().add(toward.scale(2.5))
                     level.sendParticles(ParticleTypes.PORTAL, e.x, e.y + 1.4, e.z, 60, 0.4, 1.0, 0.4, 0.6)
+                    level.sendParticles(ParticleTypes.SQUID_INK, e.x, e.y + 2.0, e.z, 10, 0.6, 1.0, 0.6, 0.05)
+                    unshrink(e)
+                    s.core?.discard(); s.core = null
                     if (e.teleport(dest.x, dest.y, dest.z) || e.teleport(target.x + toward.x * 1.5, target.y, target.z + toward.z * 1.5)) {
+                        EndermanRig.snap(e)
                         level.playSound(null, e.x, e.y, e.z, SoundEvents.ENDERMAN_TELEPORT, SoundSource.HOSTILE, 1.5f, 0.6f)
                         level.playSound(null, e.x, e.y, e.z, SoundEvents.ENDERMAN_SCREAM, SoundSource.HOSTILE, 1.8f, 0.6f)
                         s.phase = Phase.SWARM
@@ -132,7 +158,53 @@ object VoidDescent {
     private fun clear(e: Enderman, s: State) {
         s.shards.forEach { it.discard() }
         s.shards.clear()
-        if (e.carriedBlock?.`is`(Blocks.STRUCTURE_VOID) == true) e.setCarriedBlock(s.saved)
+        s.core?.discard(); s.core = null
+        unshrink(e)
+        if (e.carriedBlock == null && s.saved != null) e.setCarriedBlock(s.saved)
+        s.saved = null
+    }
+
+    private fun unshrink(e: Enderman) {
+        e.getAttribute(Attributes.SCALE)?.removeModifier(SHRINK)
+    }
+
+    /** 리그가 그린 뒤 부르는 연출: 가슴 구멍 속에서 커지며 맥동하는 공허 핵. */
+    fun decorate(level: ServerLevel, e: Enderman, rig: RigInstance, pose: Pose) {
+        val s = states[e] ?: return
+        val core = s.core ?: return
+        val t = s.t / GimmickRules.DESCENT_CHANNEL_TICKS.toFloat()
+        val sc = (0.5f + 1.3f * t) * (1f + 0.15f * sin(s.t * 1.1f))
+        val at = rig.boneOffset("body", Vector3f(0f, 4.5f, -0.6f), pose)
+        RigInstance.setTransform(core, Transformation(at, Quaternionf().rotateXYZ(s.t * 0.21f, s.t * 0.33f, 0f), Vector3f(sc, sc, sc), Quaternionf()))
+        core.setPos(e.x, e.y, e.z)
+    }
+
+    /** 집중 중 공허 조각: 몸 둘레를 돌다가 등 뒤 양쪽으로 V 자 날개처럼 펼쳐지고, 날개를 따라 검은 입자가 솟는다(피들스틱의 까마귀 줄기). */
+    private fun wings(level: ServerLevel, e: Enderman, s: State, progress: Double, now: Long) {
+        val yaw = Math.toRadians(e.yBodyRot.toDouble())
+        val fx = -sin(yaw); val fz = cos(yaw)          // 앞
+        val rx = -cos(yaw); val rz = -sin(yaw)         // 오른쪽
+        val k = (progress / 0.45).coerceIn(0.0, 1.0).let { it * it * (3 - 2 * it) }
+        val lift = 0.4 * k
+        s.shards.forEachIndexed { i, d ->
+            val a = now * (0.18 + 0.25 * progress) + i * (2 * Math.PI / s.shards.size)
+            val ox = e.x + cos(a) * (2.2 - 1.4 * progress)
+            val oz = e.z + sin(a) * (2.2 - 1.4 * progress)
+            val oy = e.y + 1.6 + 0.5 * sin(now * 0.21 + i)
+            val side = if (i % 2 == 0) -1.0 else 1.0
+            val n = i / 2
+            val wx = e.x + rx * side * (0.5 + 0.45 * n) - fx * (0.35 + 0.15 * n)
+            val wz = e.z + rz * side * (0.5 + 0.45 * n) - fz * (0.35 + 0.15 * n)
+            val wy = e.y + 2.35 + lift + 0.45 * n + 0.08 * sin(now * 0.5 + i)
+            d.setPos(ox + (wx - ox) * k, oy + (wy - oy) * k, oz + (wz - oz) * k)
+        }
+        if (k > 0.3) for (side in listOf(-1.0, 1.0)) {
+            val u = random.nextDouble()
+            val px = e.x + rx * side * (0.5 + 1.4 * u) - fx * (0.35 + 0.5 * u)
+            val pz = e.z + rz * side * (0.5 + 1.4 * u) - fz * (0.35 + 0.5 * u)
+            val py = e.y + 2.35 + lift + 1.4 * u
+            level.sendParticles(WING_DUST, px, py, pz, 1, 0.05, 0.05, 0.05, 0.0)   // 몸을 가리지 않게 작고 드물게
+        }
     }
 
     private fun spawnShards(level: ServerLevel, e: Enderman, s: State) {

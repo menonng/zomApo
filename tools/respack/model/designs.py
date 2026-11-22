@@ -571,8 +571,11 @@ def creeper_base(img, data):
     # 얼굴: 눈·입은 더 깊게, 눈 아래쪽에 포자 빛 한 점
     f = head['front']
     recolor(img, f, lambda c, x, y: NECRO[0] if is_dark(c, 0.17) else None)
+    k = SCALE[0]
     for (x, y) in [(2, 3), (5, 3)]:
-        put(img, f[0] + x, f[1] + y, SPORE[-2])
+        for dx in range(k):
+            for dy in range(k):
+                put(img, f[0] + x * k + dx, f[1] + y * k + dy, SPORE[-2])
     # 다리 아래: 흙
     for rect in (leg['front'], leg['back'], leg['left'], leg['right']):
         stain(img, part(rect, 0, 0.5, 1, 1.0), 40, DIRT, coverage=0.75, cell=1.5)

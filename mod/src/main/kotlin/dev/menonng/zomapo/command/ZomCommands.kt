@@ -105,19 +105,34 @@ object ZomCommands {
 
     /**
      * 기믹 시험(운영자): 실행한 사람 앞에 좀비화 몹을 만든다.
-     * - `/zomapo debug enderman` : 16블록 앞에 공허 붕괴체, 실행자를 노리고 공허 강림을 바로 쓸 수 있는 상태
+     * - `/zomapo debug enderman` : 10블록 앞에 공허 붕괴체, 실행자를 노리고 공허 강림을 바로 쓸 수 있는 상태
+     * - `/zomapo debug enderman still` : 6블록 앞에 가만히 선 공허 붕괴체(AI 없음, 리그 확인용)
      * - `/zomapo debug phantom` : 머리 위 14블록에 좀비를 태운 시체 운반자
      * - `/zomapo debug phantom empty` : 빈 시체 운반자(이번 급강하에 꼭 줍는다) + 앞에 좀비 하나
      */
     private fun debug(): LiteralArgumentBuilder<CommandSourceStack> =
         Commands.literal("debug")
-            .then(Commands.literal("enderman").executes { ctx ->
+            .then(Commands.literal("enderman").then(Commands.literal("still").executes { ctx ->
                 val p = ctx.source.playerOrException
                 val level = p.level()
                 val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
                 val e = net.minecraft.world.entity.EntityTypes.ENDERMAN.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
-                val x = p.x + look.x * 16
-                val z = p.z + look.z * 16
+                e.snapTo(p.x + look.x * 6, p.y, p.z + look.z * 6, p.yRot + 180f, 0f)
+                e.yBodyRot = p.yRot + 180f
+                e.yHeadRot = p.yRot + 180f
+                e.isNoAi = true
+                e.setPersistenceRequired()
+                level.addFreshEntity(e)
+                dev.menonng.zomapo.gimmick.Zombified.mark(e, 2)
+                ctx.source.sendSuccess({ Component.literal("가만히 선 공허 붕괴체") }, false)
+                1
+            }).executes { ctx ->
+                val p = ctx.source.playerOrException
+                val level = p.level()
+                val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+                val e = net.minecraft.world.entity.EntityTypes.ENDERMAN.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+                val x = p.x + look.x * 10
+                val z = p.z + look.z * 10
                 val y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x.toInt(), z.toInt()).toDouble()
                 e.snapTo(x, y, z, p.yRot + 180f, 0f)
                 e.setPersistenceRequired()

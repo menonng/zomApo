@@ -1,0 +1,116 @@
+package dev.menonng.zomapo.rig
+
+import net.minecraft.server.level.ServerLevel
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.effect.MobEffects
+import net.minecraft.world.entity.EntityTypes
+import net.minecraft.world.entity.EquipmentSlot
+import net.minecraft.world.entity.Mob
+import net.minecraft.world.entity.monster.Phantom
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.phys.Vec3
+import org.joml.Quaternionf
+import org.joml.Vector3f
+import java.util.WeakHashMap
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+/**
+ * 시체 운반자(좀비화 팬텀)의 승객을 '행글라이더' 자세로 보여 준다: 승객이 팬텀 아래에 매달려 두 팔을 위로 뻗어 팬텀을 잡고 난다.
+ * 바닐라 탈것은 승객을 팬텀 등 위에 앉히고 그 자리는 클라이언트가 정하므로, 진짜 승객은 등 위에 태운 채 투명하게 두고
+ * (손에 든 것·갑옷은 잠시 맡아 둔다) 매달린 모습은 바닐라 텍스처 그대로의 뼈대 표시 엔티티(리그)로 그린다.
+ * 내려놓을 때 진짜 승객을 매달려 있던 자리로 옮기고 되돌린다.
+ */
+object RiderPuppet {
+    private fun def(kind: String) = RigDef(
+        kind,
+        listOf(
+            BoneDef("head", Vector3f()),
+            BoneDef("hat", Vector3f(), parent = "head"),
+            BoneDef("body", Vector3f()),
+            BoneDef("right_arm", Vector3f(-5f, 2f, 0f)),
+            BoneDef("left_arm", Vector3f(5f, 2f, 0f)),
+            BoneDef("right_leg", Vector3f(-1.9f, 12f, 0f)),
+            BoneDef("left_leg", Vector3f(1.9f, 12f, 0f)),
+        ),
+    )
+    private val defs = listOf("zombie", "husk", "drowned").associateWith { def(it) }
+    /** 팬텀 원점(아래면)에서 승객 발까지(블록): 위로 뻗은 손끝(어깨 위 12픽셀)이 팬텀 배에 닿게. */
+    const val HANG = -2.03f
+
+    fun kindOf(m: Mob): String? = when (m.type) {
+        EntityTypes.ZOMBIE -> "zombie"
+        EntityTypes.HUSK -> "husk"
+        EntityTypes.DROWNED -> "drowned"
+        else -> null
+    }
+
+    private class State(val rider: Mob, var rig: RigInstance, val stash: Map<EquipmentSlot, ItemStack>) {
+        val pose = Pose(rig.def)
+    }
+    private val puppets = WeakHashMap<Phantom, State>()
+
+    fun carrying(p: Phantom): Boolean = puppets[p] != null
+
+    fun tick(level: ServerLevel, p: Phantom) {
+        val s = puppets[p]
+        val rider = p.firstPassenger as? Mob
+        if (s == null) {
+            if (rider != null && p.isAlive) kindOf(rider)?.let { attach(level, p, rider, it) }
+            return
+        }
+        if (rider !== s.rider || !p.isAlive) { forget(p); return }
+        if (!s.rig.alive || s.rig.lastPos.distanceToSqr(p.position()) > 64.0) {
+            s.rig.discard()
+            s.rig = RigInstance(s.rig.def, level, p.position())
+        }
+        val age = p.tickCount.toFloat()
+        val pose = s.pose
+        pose.reset()
+        val speed = sqrt(p.deltaMovement.x * p.deltaMovement.x + p.deltaMovement.z * p.deltaMovement.z).toFloat()
+        val trail = -(0.12f + (speed * 0.9f).coerceAtMost(0.35f)) + 0.04f * sin(age * 0.15f)     // 날면 다리가 뒤로 끌린다
+        // 매달린 몸은 중력 쪽으로 늘어진다: 팬텀 기울기는 30%만, 최대 25° 까지만 따른다
+        val pitch = (p.xRot * 0.3f).coerceIn(-25f, 25f)
+        pose.root.rotateX(Math.toRadians(pitch.toDouble()).toFloat()).rotateX(trail)
+        pose.lift.set(0f, HANG, 0.1f)
+        val ra = pose.r("right_arm"); val la = pose.r("left_arm")
+        ra.x = PI.toFloat(); la.x = PI.toFloat()           // 두 팔을 머리 위로 곧게
+        ra.z = 0.16f; la.z = -0.16f                        // 손이 팬텀 몸통 양옆을 잡게 안쪽으로
+        pose.r("head").x = 0.45f + 0.05f * sin(age * 0.1f)  // 아래(내려놓을 곳)를 본다
+        val sw = sin(age * 0.12f) * 0.15f
+        pose.r("right_leg").x = 0.12f + sw
+        pose.r("left_leg").x = -0.08f - sw
+        s.rig.apply(p.position(), p.yBodyRot, pose)
+    }
+
+    private fun attach(level: ServerLevel, p: Phantom, rider: Mob, kind: String) {
+        val stash = EquipmentSlot.entries.associateWith { slot -> rider.getItemBySlot(slot).copy() }
+        for (slot in EquipmentSlot.entries) rider.setItemSlot(slot, ItemStack.EMPTY)
+        rider.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, -1, 0, false, false, false))
+        puppets[p] = State(rider, RigInstance(defs.getValue(kind), level, p.position()), stash)
+    }
+
+    /** 매달린 승객의 발 위치(세계 좌표). 내려놓을 때 진짜 승객을 여기로 옮긴다. */
+    fun feet(p: Phantom): Vec3 {
+        val q = Quaternionf().rotationY(Math.toRadians(180.0 - p.yBodyRot).toFloat()).mul(puppets[p]?.pose?.root ?: Quaternionf())
+        val v = q.transform(Vector3f(0f, HANG, 0.1f))
+        return p.position().add(v.x.toDouble(), v.y.toDouble(), v.z.toDouble())
+    }
+
+    /** 끝: 리그를 지우고 진짜 승객을 매달려 있던 자리에 보이게 되돌린다(내려놓기·팬텀 죽음·언로드). */
+    fun forget(p: Phantom?) {
+        if (p == null) return
+        val s = puppets[p] ?: return
+        val at = feet(p)
+        puppets.remove(p)
+        s.rig.discard()
+        val r = s.rider
+        if (r.isAlive) {
+            if (r.vehicle === p) r.stopRiding()
+            r.snapTo(at.x, at.y, at.z, r.yRot, r.xRot)
+            r.removeEffect(MobEffects.INVISIBILITY)
+            for ((slot, st) in s.stash) if (!st.isEmpty) r.setItemSlot(slot, st)
+        }
+    }
+}

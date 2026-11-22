@@ -8,16 +8,17 @@ import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Phantom
-import net.minecraft.world.entity.monster.zombie.Zombie
+import dev.menonng.zomapo.rig.RiderPuppet
 import net.minecraft.world.level.levelgen.Heightmap
 import java.util.WeakHashMap
 import kotlin.random.Random
 
 /**
  * 시체 운반자(좀비화 팬텀) — 수송·투하. docs/design/zombies.md '몹 좀비화' 3절.
- * - 등에 좀비 계열을 태운 채 난다(바닐라 탈것. 승객은 팬텀을 조종하지 않는다, PhantomRiderMixin).
+ * - 좀비·허스크·드라운드를 태운 채 난다(바닐라 탈것. 승객은 팬텀을 조종하지 않는다, PhantomRiderMixin).
+ *   보이는 모습은 승객이 팬텀 아래에 매달려 두 팔로 잡고 나는 '행글라이더'(rig/RiderPuppet).
  * - 급강하(바닐라 SWOOP) 중 대상 6블록 안에 오면 승객을 내려놓는다(낙하 피해 없음).
- * - 빈 채로 급강하하면 그 급강하마다 25% 로 '줍기'를 굴리고, 땅 가까이에서 3블록 안 좀비 계열을 태워 다시 오른다.
+ * - 빈 채로 급강하하면 그 급강하마다 25% 로 '줍기'를 굴리고, 땅 가까이에서 3블록 안 좀비·허스크·드라운드를 태워 다시 오른다.
  */
 object CorpseCarrier {
     private class State { var lastPhase = ""; var pickupRolled = false; var pickupOn = false; var forcePickup = false }
@@ -59,7 +60,7 @@ object CorpseCarrier {
         val ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.blockX, p.blockZ)
         if (p.y - ground > 4.0) return
         val box = p.boundingBox.inflate(GimmickRules.PICKUP_RANGE, 2.5, GimmickRules.PICKUP_RANGE)
-        val cand = level.getEntitiesOfClass(Mob::class.java, box) { m -> m !== p && m.isAlive && !m.isPassenger && m.vehicle == null && (m is Zombie || Zombified.isZombified(m)) && m !is Phantom }
+        val cand = level.getEntitiesOfClass(Mob::class.java, box) { m -> m !== p && m.isAlive && !m.isPassenger && m.vehicle == null && RiderPuppet.kindOf(m) != null }
             .minByOrNull { it.distanceToSqr(p) } ?: return
         if (cand.startRiding(p, true, true)) {
             s.pickupOn = false
@@ -70,6 +71,7 @@ object CorpseCarrier {
     }
 
     private fun drop(level: ServerLevel, p: Phantom, rider: Mob, target: ServerPlayer) {
+        RiderPuppet.forget(p)          // 매달려 있던 자리로 진짜 승객을 옮기고 보이게 되돌린다
         rider.stopRiding()
         rider.addTag(Zombified.DROPPED_TAG)
         rider.setDeltaMovement(p.deltaMovement.x * 0.5, -0.2, p.deltaMovement.z * 0.5)

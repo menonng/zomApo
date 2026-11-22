@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""좀비화 몹 모델 만들기(디자인 3차): 미리보기 그림과 블록벤치 .bbmodel.
+"""좀비화 몹 모델 만들기(디자인 4차): 미리보기 그림과 블록벤치 .bbmodel.
 
     java ModelDump (models.json 만들기, docs/tech/architecture.md '좀비화 외형' 3-1)
     python3 build.py --models models.json --jar <마인크래프트 클라이언트 jar> --out ../out/models [--only creeper,spider]
 
 결과(저장소 제외): <out>/preview-*.png, <out>/<몹>.bbmodel, <out>/tex/<몹>_*.png
-디자인은 designs3.py(2차 designs.py 위에 부패 층 rot.py 와 Mobestiary 해부도), 칠하기 도구는 paint.py.
+디자인은 designs4.py(3차 designs3.py 위에 겹 구조·2배 텍스처·1차 복원), 칠하기 도구는 paint.py.
 """
 import argparse
 import base64
@@ -21,19 +21,31 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from zmodel import Model, jar_texture, load_models, render  # noqa: E402
+from zmodel import Model, cube_polys, jar_texture, load_models, render  # noqa: E402
 import designs as designs_mod  # noqa: E402
 from designs import humanoid_overlay, tone  # noqa: E402
-from designs3 import DESIGNS  # noqa: E402
+import designs4  # noqa: E402
+from designs4 import DESIGNS  # noqa: E402
 from paint import box_faces  # noqa: E402
+
+HIRES = 2   # 4차: 모든 몹 텍스처 2배(모델 UV 1칸 = 텍스처 2픽셀). 디자인이 'hires': 1 이면 1배
 
 
 def merged_data(models, d, zombified):
     data = copy.deepcopy(models[d['layer']])
     if d.get('outer'):
         o = copy.deepcopy(models[d['outer']])
+
+        def mark(p):
+            p['name'] = 'outer_' + p['name']
+            if d.get('outer_tex'):
+                for cube in p['cubes']:
+                    cube['tex'] = 'outer'
+                    cube['tex_size'] = tuple(o['tex'])
+            for ch in p['children']:
+                mark(ch)
         for c in o['root']['children']:
-            c['name'] = 'outer_' + c['name']
+            mark(c)
             data['root']['children'].append(c)
     if zombified and d.get('overlay'):
         bones = {}
@@ -49,7 +61,7 @@ def merged_data(models, d, zombified):
 
             def merge(p):
                 # 머리·몸통만(팔·다리 장비 모델은 해골 팔다리보다 굵어 떠 보인다 → 덧씌움 텍스처도 그 자리는 비움)
-                if p['name'] in ('head', 'body') and p['name'] in bones:
+                if p['name'] in d.get('overlay_bones', ('head', 'body')) and p['name'] in bones:
                     for cube in p['cubes']:
                         cube = dict(cube)
                         cube['tex'] = 'overlay'
@@ -65,9 +77,9 @@ def base_texture(jar, d, data, zombified):
     img = jar_texture(jar, d['texture'])
     eyes = jar_texture(jar, d['eyes']) if d.get('eyes') else None
     redraw = zombified and d['method'] in ('E', 'D')
-    if redraw and d.get('hires', 1) > 1:
-        # 작은 몹: 바탕을 2배로 키워 그 위에 칠한다(모델 UV 는 그대로, 텍스처만 고해상도)
-        k = d['hires']
+    k = max(1, d.get('hires', HIRES) // max(1, img.width // data['tex'][0]))
+    if redraw and k > 1:
+        # 바탕을 2배로 키워 그 위에 칠한다(모델 UV 는 그대로, 텍스처만 고해상도)
         img = img.resize((img.width * k, img.height * k), Image.NEAREST)
         if eyes is not None:
             eyes = eyes.resize((eyes.width * k, eyes.height * k), Image.NEAREST)
@@ -81,10 +93,61 @@ def base_texture(jar, d, data, zombified):
             d['base'](img, data)
         if d.get('base2'):
             d['base2'](img, data)
+        # 겹 구조: 껍질(살)은 해부도를 그리기 전 모습을 옮겨 쓰고, 안쪽 큐브에는 뼈·장기를 그린다
+        d['_pre'] = img.copy()
+        if d.get('anatomy'):
+            d['anatomy'](img, data)
     if eyes is not None:
         img = img.copy()
         img.alpha_composite(eyes.resize(img.size, Image.NEAREST))
+        if d.get('_pre') is not None:
+            d['_pre'].alpha_composite(eyes.resize(img.size, Image.NEAREST))
     return img
+
+
+def face_crop(m, cube, face, src_img=None):
+    """원종 큐브 한 면의 텍스처 조각(그 큐브가 쓰는 텍스처에서, 배율 반영)."""
+    img = src_img if src_img is not None else m.textures[cube.get('tex', 'base')]
+    tw = (cube['tex_size'] if 'tex_size' in cube else m.tex_size)[0]
+    kk = max(1, img.width // int(tw))
+    su, sv = cube['uv']
+    sw, sh, sd = (int(round(t)) for t in cube.get('uv_dims', cube['size']))
+    r = box_faces(int(su), int(sv), sw, sh, sd)[face]
+    return img.crop((r[0] * kk, r[1] * kk, (r[0] + r[2]) * kk, (r[1] + r[3]) * kk))
+
+
+def face_frame(c, face):
+    """큐브 c 의 한 면(텍스처 이름 'front' 등): 정규 좌표 (u, v) → 모델 좌표 함수와 바깥 법선."""
+    import numpy as np
+    dims = [int(round(v)) for v in c.get('uv_dims', c['size'])]
+    tmp = dict(origin=list(c['origin']), size=list(c['size']), uv=[0, 0], grow=[0, 0, 0], mirror=False, faces=[], uv_dims=dims)
+    r = box_faces(0, 0, *dims)[face]
+    for _name, verts, nrm in cube_polys(tmp, 1, 1):
+        us = [v[3] for v in verts]
+        vs = [v[4] for v in verts]
+        if abs(min(us) - r[0]) < 1e-6 and abs(min(vs) - r[1]) < 1e-6 and abs(max(us) - min(us) - r[2]) < 1e-6 and abs(max(vs) - min(vs) - r[3]) < 1e-6:
+            def corner(uu, vv):
+                for v in verts:
+                    if abs(v[3] - uu) < 1e-6 and abs(v[4] - vv) < 1e-6:
+                        return np.array(v[:3], dtype=float)
+            a, b, cc = corner(min(us), min(vs)), corner(max(us), min(vs)), corner(min(us), max(vs))
+            return (lambda un, vn: a + un * (b - a) + vn * (cc - a)), np.array(nrm, dtype=float)
+    raise KeyError(face)
+
+
+def pocket_walls(c, face, box, depth):
+    """껍질 면의 구멍(정규 좌표 상자 u0,v0,u1,v1)에서 안쪽으로 depth 만큼 들어가는 벽 4장(두께 0 큐브: origin, size)."""
+    import numpy as np
+    P, n = face_frame(c, face)
+    u0, v0, u1, v1 = box
+    A, B, C, D = P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)
+    out = []
+    for e1, e2 in ((A, B), (B, C), (C, D), (D, A)):
+        pts = [e1, e2, e1 - n * depth, e2 - n * depth]
+        lo = np.min(pts, axis=0)
+        hi = np.max(pts, axis=0)
+        out.append(([float(t) for t in lo], [float(t) for t in hi - lo]))
+    return out
 
 
 def uv_dims(size):
@@ -112,10 +175,15 @@ def pack(items, size=64):
 
 
 def make(models, jar, name, zombified):
+    designs4.JAR[0] = jar
     d = DESIGNS[name]()
     data = merged_data(models, d, zombified)
     tex = base_texture(jar, d, data, zombified)
     m = Model(name, data, tex)
+    if d.get('outer_tex'):
+        m.textures['outer'] = jar_texture(jar, d['outer_tex'])
+        if zombified and d.get('outer_fn'):
+            d['outer_fn'](m.textures['outer'])
     if d.get('scale'):
         m.root.scale = m.root.scale * d['scale']
     if not zombified:
@@ -134,12 +202,32 @@ def make(models, jar, name, zombified):
         if keep == 'min':
             c['origin'][ai] += old - length
         c['size'][ai] = length
-    jobs = []  # (큐브, 칠하기, 복사할 원종 큐브)
+    jobs = []  # (큐브, 칠하기, 복사할 원종 큐브 목록)
     for bone, idx, painter in d.get('retex', []):
         c = m.root.find(bone).cubes[idx]
         c.update(tex='parts', mirror=False)
         c['uv_dims'] = uv_dims(c['size'])
         jobs.append((c, painter, None))
+    for L in d.get('layered', []):
+        # 겹 구조: 원종 큐브를 depth 만큼 안으로 줄여 '속'(뼈·장기)으로 쓰고, 원래 자리에 살 껍질을 씌운다.
+        # 겉모양(실루엣)은 바닐라 그대로. 껍질 구멍으로 한 겹 안쪽의 뼈가 보인다.
+        part_ = m.root.find(L['bone'])
+        c = part_.cubes[L.get('idx', 0)]
+        dep = L['depth']
+        shell = dict(origin=list(c['origin']), size=list(c['size']), grow=[0, 0, 0], mirror=False, uv=[0, 0], texScale=[1, 1],
+                     faces=[], tex='parts', added=True, tell=L.get('tell'), glow=False, uv_dims=uv_dims(c['size']), shell=True)
+        c['uv_dims'] = [int(round(v)) for v in c['size']]
+        c['origin'] = [o + dep for o in c['origin']]
+        c['size'] = [max(0.01, v - 2 * dep) for v in c['size']]
+        part_.cubes.append(shell)
+        jobs.append((shell, L['paint'], [('pre', L['bone'], L.get('idx', 0))]))
+        for face, box in L.get('walls', []):
+            # 구멍 둘레 벽: 비스듬히 봐도 껍질과 속 사이 틈으로 뒤가 비치지 않게, 찢긴 살의 두께가 보이게
+            for o, sz in pocket_walls(shell, face, box, dep):
+                w = dict(origin=o, size=sz, grow=[0, 0, 0], mirror=False, uv=[0, 0], texScale=[1, 1], faces=[], tex='parts',
+                         added=True, tell=None, glow=False, uv_dims=uv_dims(sz))
+                part_.cubes.append(w)
+                jobs.append((w, L.get('wall_paint') or L['paint'], None))
     for a in d.get('adds', []):
         c = dict(origin=list(a['origin']), size=list(a['size']), grow=list(a.get('grow') or [0, 0, 0]), mirror=False, uv=[0, 0],
                  texScale=[1, 1], faces=[], tex='parts', added=True, tell=a.get('tell'), glow=a.get('glow', False))
@@ -147,36 +235,40 @@ def make(models, jar, name, zombified):
             c['rot'] = a['rot']
         c['uv_dims'] = uv_dims(a['size'])
         m.root.find(a['bone']).cubes.append(c)
-        jobs.append((c, a['paint'], a.get('copy')))
+        cp = a.get('copy')
+        if cp and not isinstance(cp, list):
+            cp = [cp]
+        jobs.append((c, a['paint'], cp))
     if jobs:
-        ps = int(d.get('parts_scale', 1))  # 덧붙임 텍스처 배율(작은 몹 2)
+        ps = int(d.get('parts_scale', HIRES))  # 덧붙임 텍스처 배율
         sizes = []
         for c, _, _ in jobs:
             w, h, dd = c['uv_dims']
             sizes.append((max(1, 2 * (w + dd)), max(1, dd + h)))
         pos, S = pack(sizes)
         atlas = Image.new('RGBA', (S * ps, S * ps), (0, 0, 0, 0))
-        kk = max(1, m.texture.width // m.tex_size[0])
         for k, ((c, painter, copy_src), (x, y)) in enumerate(zip(jobs, pos)):
             c['uv'] = [x, y]
             c['tex_size'] = (S, S)
             w, h, dd = c['uv_dims']
             faces = {f: (r[0] * ps, r[1] * ps, r[2] * ps, r[3] * ps) for f, r in box_faces(x, y, w, h, dd).items() if r[2] > 0 and r[3] > 0}
-            if copy_src:
-                # 머리 덮개: 원종 큐브의 면을 그대로 옮겨 온 뒤 다시 칠한다
-                src = m.root.find(copy_src[0]).cubes[copy_src[1]]
-                su, sv = src['uv']
-                sw, sh, sd = (int(round(t)) for t in src['size'])
-                sf = box_faces(int(su), int(sv), sw, sh, sd)
+            for src in (copy_src or []):
+                # 원종 큐브의 면을 옮겨 온 뒤 다시 칠한다(머리 덮개, 살 껍질). 여러 개면 차례로 겹친다(덧층 합치기)
+                if src[0] == 'pre':
+                    sc, simg = m.root.find(src[1]).cubes[src[2]], d['_pre']
+                else:
+                    sc, simg = m.root.find(src[0]).cubes[src[1]], None
                 for f, r in faces.items():
-                    s0 = sf[f]
-                    crop = m.texture.crop((s0[0] * kk, s0[1] * kk, (s0[0] + s0[2]) * kk, (s0[1] + s0[3]) * kk))
-                    atlas.paste(crop.resize((r[2], r[3]), Image.NEAREST), (r[0], r[1]))
+                    crop = face_crop(m, sc, f, simg).resize((r[2], r[3]), Image.NEAREST)
+                    atlas.alpha_composite(crop, (r[0], r[1]))
             painter(atlas, faces, 1000 + 97 * k)
         m.textures['parts'] = atlas
         m.parts_uv = S
     if d.get('overlay_fn'):
-        m.textures['overlay'] = humanoid_overlay(d['overlay_fn'])
+        m.textures['overlay'] = humanoid_overlay(d['overlay_fn'], d.get('overlay_size', (64, 32)))
+    if d.get('overlay_fn2'):
+        # 장비 레이어 텍스처를 바닐라 몸 텍스처(와 덧층)에서 옮겨 그린다(1차 해골, 브루트)
+        m.textures['overlay'] = d['overlay_fn2'](m.textures['base'], m.textures.get('outer'))
     return m, d
 
 
@@ -194,11 +286,11 @@ def to_bbmodel(m, name):
     textures = [{'name': name + '.png', 'id': '0', 'width': m.texture.width, 'height': m.texture.height,
                  'uv_width': tw, 'uv_height': th, 'source': _png64(m.texture), 'uuid': str(uuid.uuid4())}]
     tindex = {'base': 0}
-    for key in ('parts', 'overlay'):
+    for key in ('parts', 'overlay', 'outer'):
         if key in m.textures:
             a = m.textures[key]
             tindex[key] = len(textures)
-            uvw, uvh = (64, 32) if key == 'overlay' else (getattr(m, 'parts_uv', a.width),) * 2
+            uvw, uvh = (64, 32) if key in ('overlay', 'outer') else (getattr(m, 'parts_uv', a.width),) * 2
             textures.append({'name': f'{name}_{key}.png', 'id': str(len(textures)), 'width': a.width, 'height': a.height,
                              'uv_width': uvw, 'uv_height': uvh, 'source': _png64(a), 'uuid': str(uuid.uuid4())})
     elements = []
@@ -263,7 +355,7 @@ def to_bbmodel(m, name):
 FONT = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 TITLE = {
     'creeper': '균사 크리퍼', 'spider': '알집 거미', 'cave_spider': '독샘 거미', 'enderman': '공허 붕괴체',
-    'creaking': '창백한 썩음(크리킹)', 'slime': '늪 찌꺼기(슬라임)', 'magma_cube': '혼불 큐브(마그마 큐브)',
+    'creaking': '창백한 썩음(크리킹)', 'slime': '늪 찌꺼기(슬라임)', 'magma_cube': '부패 마그마 큐브',
     'phantom': '시체 운반자(팬텀)', 'guardian': '익사체 지휘관(가디언)', 'elder_guardian': '썩은 장로(엘더 가디언)',
     'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트', 'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골',
     'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)', 'wither_skeleton': '진홍 해골(위더 스켈레톤)',
