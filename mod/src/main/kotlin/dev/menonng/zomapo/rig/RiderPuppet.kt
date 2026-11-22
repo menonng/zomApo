@@ -14,6 +14,10 @@ import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Phantom
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.phys.Vec3
+import net.minecraft.world.phys.AABB
+import net.minecraft.util.Mth
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow
+import dev.menonng.zomapo.mixin.ArrowAccessor
 import org.joml.Quaternionf
 import org.joml.Vector3f
 import java.util.WeakHashMap
@@ -66,6 +70,7 @@ object RiderPuppet {
         if (rider !== s.rider || !p.isAlive) { forget(p); return }
         val at = feet(p)
         s.hitbox.setPos(at.x, at.y, at.z)
+        arrows(level, s, at)
         if (!s.rig.alive || s.rig.lastPos.distanceToSqr(p.position()) > 64.0) {
             s.rig.discard()
             s.rig = RigInstance(s.rig.def, level, p.position())
@@ -87,6 +92,27 @@ object RiderPuppet {
         pose.r("right_leg").x = 0.12f + sw
         pose.r("left_leg").x = -0.08f - sw
         s.rig.apply(p.position(), p.yBodyRot, pose)
+    }
+
+    /**
+     * 화살로 매달린 탑승자 맞히기: 진짜 승객은 팬텀 등 위(투명)에 있어 바닐라 화살은 매달린 모습을 지나친다.
+     * 매달린 자리(0.7 × 1.95) 근처의 날아가는 화살마다 이번 틱에 지나온 선분이 그 상자를 지나면 진짜 승객이 맞은 것으로 하고 화살을 없앤다.
+     * 피해는 바닐라 화살 식(속도 × 기본 피해, 올림, 치명타면 무작위 추가).
+     */
+    private fun arrows(level: ServerLevel, s: State, at: Vec3) {
+        val box = AABB(at.x - 0.35, at.y, at.z - 0.35, at.x + 0.35, at.y + 1.95, at.z + 0.35)
+        for (a in level.getEntitiesOfClass(AbstractArrow::class.java, box.inflate(4.0)) { it.isAlive && !(it as ArrowAccessor).`zomapo$isInGround`() }) {
+            if (a.owner === s.rider) continue
+            // 화살은 이번 틱에 이미 움직였다: 이전 위치 → 지금 위치 선분(Zombified 틱은 엔티티 틱 뒤)
+            val from = Vec3(a.xo, a.yo, a.zo)
+            val to = a.position()
+            if (!box.contains(from) && box.clip(from, to).isEmpty) continue
+            val speed = a.deltaMovement.length()
+            var dmg = Mth.ceil(Mth.clamp(speed * (a as ArrowAccessor).`zomapo$baseDamage`(), 0.0, Int.MAX_VALUE.toDouble()))
+            if (a.isCritArrow) dmg += level.random.nextInt(dmg / 2 + 2)
+            s.rider.hurtServer(level, level.damageSources().arrow(a, a.owner ?: a), dmg.toFloat())
+            a.discard()
+        }
     }
 
     private fun attach(level: ServerLevel, p: Phantom, rider: Mob, kind: String) {

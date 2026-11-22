@@ -93,8 +93,10 @@ object Noise {
         listeners: List<Listener>,
         nowTick: Long,
         budgetLeft: Int = GLOBAL_BUDGET_PER_SECOND,
-    ): List<Int> {
-        val r = radius(source, sneaking).toDouble()
+    ): List<Int> = respondersWithin(radius(source, sneaking).toDouble(), listeners, nowTick, budgetLeft)
+
+    /** 반경을 직접 주는 판(소음 화살 24 처럼 소리 종류 밖의 소음). */
+    fun respondersWithin(r: Double, listeners: List<Listener>, nowTick: Long, budgetLeft: Int = GLOBAL_BUDGET_PER_SECOND): List<Int> {
         return listeners.asSequence()
             .filter { it.distance <= r && !it.hasTarget && nowTick - it.lastInvestigateTick >= INVESTIGATE_COOLDOWN_TICKS }
             .sortedBy { it.distance }
@@ -102,4 +104,8 @@ object Noise {
             .map { it.id }
             .toList()
     }
+
+    /** 살피러 온 좀비가 '도착했다'고 보는 거리, 소음 화살에서 근처 누구든 노리는 반경. */
+    const val ARRIVE_DISTANCE = 3.0
+    const val STRIKE_RADIUS = 10.0
 }

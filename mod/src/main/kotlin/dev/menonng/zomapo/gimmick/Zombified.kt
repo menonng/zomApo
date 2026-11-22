@@ -14,6 +14,9 @@ import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Enderman
 import net.minecraft.world.entity.monster.Phantom
 import net.minecraft.world.entity.monster.Shulker
+import net.minecraft.world.entity.monster.illager.AbstractIllager
+import net.minecraft.world.entity.monster.illager.Pillager
+import net.minecraft.world.entity.monster.illager.Vindicator
 import dev.menonng.zomapo.rig.RigSystem
 import dev.menonng.zomapo.rig.RiderPuppet
 import dev.menonng.zomapo.rig.RigInstance
@@ -54,6 +57,10 @@ object Zombified {
         RigInstance.register()
         RiderPuppet.register()
         ShulkerParasite.register()
+        VindicatorAxe.register()
+        NoiseSystem.register()
+        IllagerPatrol.register()
+        AlphaSystem.register()
         ServerTickEvents.END_LEVEL_TICK.register { level -> tick(level) }
         // 시체 운반자가 내려놓은 승객은 낙하 피해를 받지 않는다
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, _ ->
@@ -77,6 +84,9 @@ object Zombified {
                 is Enderman -> VoidDescent.tick(level, mob)
                 is Phantom -> { CorpseCarrier.tick(level, mob); RiderPuppet.tick(level, mob) }
                 is Shulker -> ShulkerParasite.tick(level, mob)
+                is Vindicator -> VindicatorAxe.tick(level, mob)
+                is Pillager -> { IllagerPatrol.tick(level, mob); VindicatorAxe.cover(mob) }
+                is AbstractIllager -> VindicatorAxe.cover(mob)
             }
             Motion.track(level, mob)
             RigSystem.tick(level, mob)

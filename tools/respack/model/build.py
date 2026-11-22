@@ -243,7 +243,7 @@ def make(models, jar, name, zombified, preview_pose=True):
                 jobs.append((w, L.get('wall_paint') or L['paint'], None))
     for a in d.get('adds', []):
         c = dict(origin=list(a['origin']), size=list(a['size']), grow=list(a.get('grow') or [0, 0, 0]), mirror=False, uv=[0, 0],
-                 texScale=[1, 1], faces=[], tex='parts', added=True, tell=a.get('tell'), glow=a.get('glow', False))
+                 texScale=[1, 1], faces=[], tex='parts', added=True, tell=a.get('tell'), glow=a.get('glow', False), name=a.get('name'))
         if a.get('rot'):
             c['rot'] = a['rot']
         c['uv_dims'] = uv_dims(a['size'])

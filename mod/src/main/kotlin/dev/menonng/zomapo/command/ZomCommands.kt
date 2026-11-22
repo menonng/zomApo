@@ -164,9 +164,62 @@ object ZomCommands {
                 .executes { ctx -> spawnCarrier(ctx, empty = false) }
                 .then(Commands.literal("empty").executes { ctx -> spawnCarrier(ctx, empty = true) })
                 .then(Commands.literal("kidnap").executes { ctx -> spawnCarrier(ctx, empty = true, zombie = false) }))
+            .then(Commands.literal("patrol").executes { ctx -> spawnPatrol(ctx) })
+            .then(Commands.literal("noise").then(Commands.argument("radius", IntegerArgumentType.integer(1, 64)).executes { ctx ->
+                val p = ctx.source.playerOrException
+                val n = dev.menonng.zomapo.gimmick.NoiseSystem.emit(p.level(), p.position(), IntegerArgumentType.getInteger(ctx, "radius"), strike = true)
+                ctx.source.sendSuccess({ Component.literal("소음을 냈습니다: 좀비 ${n}마리가 살피러 옵니다.") }, false); 1
+            })
+                .executes { ctx ->
+                    ctx.source.sendSuccess({ Component.literal("소음 화살 ${dev.menonng.zomapo.gimmick.IllagerPatrol.impacts}번") }, false); 1
+                })
+            .then(Commands.literal("alpha")
+                .executes { ctx -> alpha(ctx, near = true) }
+                .then(Commands.literal("far").executes { ctx -> alpha(ctx, near = false) })
+                .then(Commands.literal("clear").executes { ctx ->
+                    val ok = dev.menonng.zomapo.gimmick.AlphaSystem.clearNow(ctx.source.server)
+                    ctx.source.sendSuccess({ Component.literal(if (ok) "알파를 없앴습니다." else "알파가 없습니다.") }, false); 1
+                })
+                .then(Commands.literal("info").executes { ctx ->
+                    ctx.source.sendSuccess({ Component.literal(dev.menonng.zomapo.gimmick.AlphaSystem.info(ctx.source.server)) }, false); 1
+                }))
             .then(Commands.literal("rig").then(Commands.argument("mob", com.mojang.brigadier.arguments.StringArgumentType.word())
                 .executes { ctx -> spawnRig(ctx, false) }
                 .then(Commands.literal("ai").executes { ctx -> spawnRig(ctx, true) })))
+
+    /** 알파를 지금 만든다(대상 = 명령한 사람). near: 40블록 앞(시험용), 아니면 규칙대로 256~512블록. */
+    private fun alpha(ctx: CommandContext<CommandSourceStack>, near: Boolean): Int {
+        val p = ctx.source.playerOrException
+        val ok = dev.menonng.zomapo.gimmick.AlphaSystem.spawn(p, near)
+        if (ok) ctx.source.sendSuccess({ Component.literal("알파를 만들었습니다.") }, false)
+        else ctx.source.sendFailure(Component.literal("이미 알파가 있습니다."))
+        return if (ok) 1 else 0
+    }
+
+    /** 좀비화 정찰대(대장 + 대원 2)를 8블록 앞에 만든다: 소음 사수·불어나는 정찰대 시험. */
+    private fun spawnPatrol(ctx: CommandContext<CommandSourceStack>): Int {
+        val p = ctx.source.playerOrException
+        val level = p.level()
+        val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+        val at = p.position().add(look.scale(8.0))
+        val leader = net.minecraft.world.entity.EntityTypes.PILLAGER.create(level, net.minecraft.world.entity.EntitySpawnReason.PATROL)!!
+        leader.snapTo(at.x, at.y, at.z, p.yRot + 180f, 0f)
+        leader.setPatrolLeader(true)
+        leader.findPatrolTarget()
+        leader.finalizeSpawn(level, level.getCurrentDifficultyAt(leader.blockPosition()), net.minecraft.world.entity.EntitySpawnReason.PATROL, null)
+        level.addFreshEntity(leader)
+        repeat(2) { i ->
+            val m = net.minecraft.world.entity.EntityTypes.PILLAGER.create(level, net.minecraft.world.entity.EntitySpawnReason.PATROL)!!
+            m.snapTo(at.x + (i * 2 - 1) * 1.5, at.y, at.z + 1.0, p.yRot + 180f, 0f)
+            m.finalizeSpawn(level, level.getCurrentDifficultyAt(m.blockPosition()), net.minecraft.world.entity.EntitySpawnReason.PATROL, null)
+            leader.patrolTarget?.let { m.setPatrolTarget(it) }
+            level.addFreshEntity(m)
+        }
+        dev.menonng.zomapo.gimmick.IllagerPatrol.zombifyPatrol(level, leader, 3)
+        val n = level.getEntitiesOfClass(net.minecraft.world.entity.monster.PatrollingMonster::class.java, leader.boundingBox.inflate(24.0)) { dev.menonng.zomapo.gimmick.Zombified.isZombified(it) }.size
+        ctx.source.sendSuccess({ Component.literal("좀비화 정찰대를 만들었습니다: ${n}명") }, false)
+        return 1
+    }
 
     /** 좀비화 리그 몹을 5블록 앞에 만든다. ai 가 없으면 가만히(NoAI), 있으면 바닐라 AI 그대로(움직임 연출 시험). */
     private fun spawnRig(ctx: CommandContext<CommandSourceStack>, ai: Boolean): Int {

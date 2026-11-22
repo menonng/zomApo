@@ -96,6 +96,19 @@ object AlphaRules {
     /** 늘 같은 속도(2026-11-22: 공격 뒤 감속 삭제). */
     fun speedPerTick(@Suppress("UNUSED_PARAMETER") ticksSinceHit: Int = 0): Double = SPEED_PER_TICK
 
+    /** 잠수(AFK): 5분 동안 움직임·시선 변화가 없으면 잠수(국가 모드와 같은 기준). */
+    const val AFK_TICKS = 6_000
+    const val GLOW_RANGE = 128.0                // 이 안에서만 무지개 발광을 보낸다(대상 화면에 알파가 있을 수 있는 거리)
+    const val TARGET_RANGE = 40.0               // 이 안에서 대상을 노린다(바닐라 근접 공격). 멀면 걷기만
+    const val CRY_FAR = 1_200                   // 먼 울음소리 간격: 256블록 이상 60초
+    const val CRY_NEAR = 200                    // 32블록 안 10초
+
+    /** 대상에게만 들리는 먼 울음소리 간격(틱): 다가올수록 잦아진다(256블록 이상 60초 → 32블록 안 10초, 그 사이는 직선). */
+    fun cryInterval(distance: Double): Int {
+        val t = ((distance - 32.0) / (256.0 - 32.0)).coerceIn(0.0, 1.0)
+        return (CRY_NEAR + (CRY_FAR - CRY_NEAR) * t).toInt()
+    }
+
     fun rainbowColor(tick: Long): String = RAINBOW[((tick / RAINBOW_STEP_TICKS) % RAINBOW.size).toInt()]
 
     enum class Follow { CHASE, HOLD, DESPAWN }

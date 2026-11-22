@@ -127,6 +127,11 @@ class AlphaTest {
         assertEquals(AlphaRules.Follow.HOLD, AlphaRules.follow("minecraft:the_end", 0))
         assertEquals(AlphaRules.Follow.HOLD, AlphaRules.follow("minecraft:the_end", AlphaRules.END_WAIT_TICKS - 1))
         assertEquals(AlphaRules.Follow.DESPAWN, AlphaRules.follow("minecraft:the_end", AlphaRules.END_WAIT_TICKS))
+        // 먼 울음소리는 다가올수록 잦아진다
+        assertEquals(AlphaRules.CRY_FAR, AlphaRules.cryInterval(600.0))
+        assertEquals(AlphaRules.CRY_NEAR, AlphaRules.cryInterval(10.0))
+        assertTrue(AlphaRules.cryInterval(100.0) in AlphaRules.CRY_NEAR..AlphaRules.CRY_FAR)
+        assertTrue(AlphaRules.cryInterval(200.0) > AlphaRules.cryInterval(100.0))
     }
 
     @Test
