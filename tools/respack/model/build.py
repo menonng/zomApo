@@ -47,6 +47,18 @@ def merged_data(models, d, zombified):
         for c in o['root']['children']:
             mark(c)
             data['root']['children'].append(c)
+    for eb in (d.get('extra_bones', []) if zombified else []):
+        # 디자인이 더하는 뼈대(엔더맨 공허 날개 등): 바닐라 모델에 없는 움직이는 부위
+        def find(p):
+            if p['name'] == eb['parent']:
+                return p
+            for c in p['children']:
+                r = find(c)
+                if r:
+                    return r
+            return None
+        parent = find(data['root'])
+        parent['children'].append({'name': eb['name'], 'pose': list(eb['pivot']) + [0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 'cubes': [], 'children': []})
     if zombified and d.get('overlay'):
         bones = {}
 
@@ -174,7 +186,8 @@ def pack(items, size=64):
         size *= 2
 
 
-def make(models, jar, name, zombified):
+def make(models, jar, name, zombified, preview_pose=True):
+    """preview_pose=False: 미리보기용 자세(고개 기울임 등)를 빼고 바닐라 기본 자세로(리그 내보내기)."""
     designs4.JAR[0] = jar
     d = DESIGNS[name]()
     data = merged_data(models, d, zombified)
@@ -188,7 +201,7 @@ def make(models, jar, name, zombified):
         m.root.scale = m.root.scale * d['scale']
     if not zombified:
         return m, d
-    for bone, (dx, dy, dz) in d.get('pose', {}).items():
+    for bone, (dx, dy, dz) in (d.get('pose', {}) if preview_pose else {}).items():
         p = m.root.find(bone)
         p.rot = p.rot + [math.radians(dx), math.radians(dy), math.radians(dz)]
     for bone, idx in d.get('remove', []):
@@ -264,6 +277,11 @@ def make(models, jar, name, zombified):
             painter(atlas, faces, 1000 + 97 * k)
         m.textures['parts'] = atlas
         m.parts_uv = S
+    if preview_pose:
+        # 미리보기에서는 평소 숨어 있는 뼈대(집중 때만 펼치는 날개 등)를 감춘다
+        for b in d.get('hidden_bones', []):
+            for c in m.root.find(b).cubes:
+                c['hidden'] = True
     if d.get('overlay_fn'):
         m.textures['overlay'] = humanoid_overlay(d['overlay_fn'], d.get('overlay_size', (64, 32)))
     if d.get('overlay_fn2'):
@@ -359,16 +377,28 @@ TITLE = {
     'phantom': '시체 운반자(팬텀)', 'guardian': '익사체 지휘관(가디언)', 'elder_guardian': '썩은 장로(엘더 가디언)',
     'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트', 'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골',
     'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)', 'wither_skeleton': '진홍 해골(위더 스켈레톤)',
-    'piglin_brute': '진홍 브루트', 'pillager': '표식 약탈자', 'vindicator': '도끼잡이(변명자)', 'evoker': '강령 소환사',
-    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '중력 셜커', 'ravager': '썩은 파괴수',
+    'piglin_brute': '진홍 브루트', 'pillager': '소음 약탈자', 'vindicator': '도끼잡이(변명자)', 'evoker': '강령 소환사',
+    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '가시 셜커', 'ravager': '썩은 파괴수',
 }
 METHOD = {'E': '리그', 'B': '장비 덧씌움 + 머리 아이템 (몸 텍스처는 바닐라)', 'C': '머리 아이템 (몸 텍스처는 바닐라)', 'D': '색 변형 텍스처'}
+
+
+def inner_posed(m, pose):
+    """속을 보여 주는 자세(셜커 뚜껑을 들어 올림, 마그마 큐브 층이 벌어짐): {뼈대: (dx, dy, dz, rx, ry, rz 도)}."""
+    import copy as _c
+    mm = _c.copy(m)
+    mm.root = _c.deepcopy(m.root)
+    for bone, (dx, dy, dz, rx, ry, rz) in pose.items():
+        p = mm.root.find(bone)
+        p.offset = p.offset + [dx, dy, dz]
+        p.rot = p.rot + [math.radians(rx), math.radians(ry), math.radians(rz)]
+    return mm
 
 
 def preview_sheet(models, jar, names, out_path, cell=300):
     font = ImageFont.truetype(FONT, 22, index=1)
     small = ImageFont.truetype(FONT, 15, index=1)
-    W, H = cell * 3, (cell + 58) * len(names)
+    W, H = cell * 4, (cell + 58) * len(names)
     sheet = Image.new('RGBA', (W, H), (34, 34, 40, 255))
     dr = ImageDraw.Draw(sheet)
     for r, name in enumerate(names):
@@ -377,10 +407,13 @@ def preview_sheet(models, jar, names, out_path, cell=300):
         z, d = make(models, jar, name, True)
         yaw, pitch = d.get('view', (-35, 22))
         tiles = [render(o, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw + 180, pitch=pitch)]
+        if d.get('inner_pose'):
+            tiles.append(render(inner_posed(z, d['inner_pose']), size=cell, yaw=yaw, pitch=d.get('inner_view_pitch', pitch)))
         for i, t in enumerate(tiles):
             sheet.alpha_composite(t, (i * cell, y + 34))
         hires = '  ·  텍스처 2배' if d.get('hires', 1) > 1 else ''
-        dr.text((10, y + 4), f'{TITLE.get(name, name)}  ·  {METHOD[d["method"]]}{hires}  —  원종 / 좀비화 앞 / 뒤', font=font, fill=(235, 235, 235))
+        inner = ' / 속(열린 모습)' if d.get('inner_pose') else ''
+        dr.text((10, y + 4), f'{TITLE.get(name, name)}  ·  {METHOD[d["method"]]}{hires}  —  원종 / 좀비화 앞 / 뒤{inner}', font=font, fill=(235, 235, 235))
         dr.text((10, y + cell + 12), d.get('concept', ''), font=small, fill=(205, 205, 205))
         tell = next((a.get('tell') for a in d.get('adds', []) if a.get('tell')), d.get('tell'))
         if tell:

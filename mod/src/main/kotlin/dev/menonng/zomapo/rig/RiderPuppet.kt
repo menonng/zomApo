@@ -3,7 +3,12 @@ package dev.menonng.zomapo.rig
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.effect.MobEffectInstance
 import net.minecraft.world.effect.MobEffects
+import dev.menonng.zomapo.mixin.InteractionInvoker
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback
+import net.minecraft.world.InteractionResult
+import net.minecraft.world.entity.EntitySpawnReason
 import net.minecraft.world.entity.EntityTypes
+import net.minecraft.world.entity.Interaction
 import net.minecraft.world.entity.EquipmentSlot
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Phantom
@@ -20,22 +25,10 @@ import kotlin.math.sqrt
  * 시체 운반자(좀비화 팬텀)의 승객을 '행글라이더' 자세로 보여 준다: 승객이 팬텀 아래에 매달려 두 팔을 위로 뻗어 팬텀을 잡고 난다.
  * 바닐라 탈것은 승객을 팬텀 등 위에 앉히고 그 자리는 클라이언트가 정하므로, 진짜 승객은 등 위에 태운 채 투명하게 두고
  * (손에 든 것·갑옷은 잠시 맡아 둔다) 매달린 모습은 바닐라 텍스처 그대로의 뼈대 표시 엔티티(리그)로 그린다.
- * 내려놓을 때 진짜 승객을 매달려 있던 자리로 옮기고 되돌린다.
+ * 내려놓을 때 진짜 승객을 매달려 있던 자리로 옮기고 되돌린다. 매달린 자리에 맞는 판정(상호작용 엔티티)을 두어,
+ * 거기를 치면 진짜 승객이 맞는다.
  */
 object RiderPuppet {
-    private fun def(kind: String) = RigDef(
-        kind,
-        listOf(
-            BoneDef("head", Vector3f()),
-            BoneDef("hat", Vector3f(), parent = "head"),
-            BoneDef("body", Vector3f()),
-            BoneDef("right_arm", Vector3f(-5f, 2f, 0f)),
-            BoneDef("left_arm", Vector3f(5f, 2f, 0f)),
-            BoneDef("right_leg", Vector3f(-1.9f, 12f, 0f)),
-            BoneDef("left_leg", Vector3f(1.9f, 12f, 0f)),
-        ),
-    )
-    private val defs = listOf("zombie", "husk", "drowned").associateWith { def(it) }
     /** 팬텀 원점(아래면)에서 승객 발까지(블록): 위로 뻗은 손끝(어깨 위 12픽셀)이 팬텀 배에 닿게. */
     const val HANG = -2.03f
 
@@ -46,10 +39,20 @@ object RiderPuppet {
         else -> null
     }
 
-    private class State(val rider: Mob, var rig: RigInstance, val stash: Map<EquipmentSlot, ItemStack>) {
+    private class State(val rider: Mob, var rig: RigInstance, val stash: Map<EquipmentSlot, ItemStack>, val hitbox: Interaction) {
         val pose = Pose(rig.def)
     }
     private val puppets = WeakHashMap<Phantom, State>()
+    private val hitboxes = WeakHashMap<Interaction, Mob>()
+
+    /** 매달린 자리의 맞는 판정(상호작용 엔티티)을 친 플레이어 → 진짜 승객을 친 것으로(AttackEntityCallback). */
+    fun register() {
+        AttackEntityCallback.EVENT.register { player, level, _, entity, _ ->
+            val rider = (entity as? Interaction)?.let { hitboxes[it] }
+            if (level.isClientSide || rider == null || !rider.isAlive) InteractionResult.PASS
+            else { player.attack(rider); InteractionResult.SUCCESS }
+        }
+    }
 
     fun carrying(p: Phantom): Boolean = puppets[p] != null
 
@@ -61,6 +64,8 @@ object RiderPuppet {
             return
         }
         if (rider !== s.rider || !p.isAlive) { forget(p); return }
+        val at = feet(p)
+        s.hitbox.setPos(at.x, at.y, at.z)
         if (!s.rig.alive || s.rig.lastPos.distanceToSqr(p.position()) > 64.0) {
             s.rig.discard()
             s.rig = RigInstance(s.rig.def, level, p.position())
@@ -88,7 +93,15 @@ object RiderPuppet {
         val stash = EquipmentSlot.entries.associateWith { slot -> rider.getItemBySlot(slot).copy() }
         for (slot in EquipmentSlot.entries) rider.setItemSlot(slot, ItemStack.EMPTY)
         rider.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, -1, 0, false, false, false))
-        puppets[p] = State(rider, RigInstance(defs.getValue(kind), level, p.position()), stash)
+        val def = RigDefs.get(kind) ?: return
+        val box = EntityTypes.INTERACTION.create(level, EntitySpawnReason.TRIGGERED)!!
+        (box as InteractionInvoker).`zomapo$setWidth`(0.7f)
+        (box as InteractionInvoker).`zomapo$setHeight`(1.95f)
+        box.addTag(RigInstance.TAG)
+        box.setPos(p.x, p.y + HANG, p.z)
+        level.addFreshEntity(box)
+        hitboxes[box] = rider
+        puppets[p] = State(rider, RigInstance(def, level, p.position()), stash, box)
     }
 
     /** 매달린 승객의 발 위치(세계 좌표). 내려놓을 때 진짜 승객을 여기로 옮긴다. */
@@ -105,6 +118,8 @@ object RiderPuppet {
         val at = feet(p)
         puppets.remove(p)
         s.rig.discard()
+        hitboxes.remove(s.hitbox)
+        s.hitbox.discard()
         val r = s.rider
         if (r.isAlive) {
             if (r.vehicle === p) r.stopRiding()

@@ -25,9 +25,14 @@ object AlphaRules {
     const val MIN_ACTIVE_ONLINE = 3
     const val SPAWN_MIN = 256.0
     const val SPAWN_MAX = 512.0
-    const val SPEED_PER_TICK = 5.6 / 20.0       // 초속 5.6블록(달리기와 같음)
-    const val SLOW_AFTER_HIT_TICKS = 60         // 공격한 뒤 3초는 초속 4.3
-    const val SLOW_SPEED_PER_TICK = 4.3 / 20.0
+    const val SPEED_PER_TICK = 5.6 / 20.0       // 초속 5.6블록(달리기와 같음). 늘 이 속도: 물·영혼 모래·거미줄·구속·넉백·공격 뒤에도 느려지지 않는다
+    /** 무지개 발광(monun 저장소의 무지개 테두리 방식): 대상에게만 보내는 팀 색을 2틱마다 다음 색으로. */
+    const val RAINBOW_STEP_TICKS = 2
+    val RAINBOW = listOf("red", "gold", "yellow", "green", "aqua", "blue", "light_purple")
+    /** 엔드로 넘어갈 때: 같은 좌표는 공허일 수 있으므로 대상 둘레 16~32블록 고리에서 설 수 있는 자리를 찾는다. */
+    const val END_RING_MIN = 16.0
+    const val END_RING_MAX = 32.0
+    const val END_TRIES = 24
     const val CHUNK_TICKET_RADIUS = 2           // 알파가 붙잡는 청크 반경
     const val WAYPOINT_STEP = 32.0
     const val BREAK_AFTER_TICKS = 40            // 2초 동안 못 가까워지면 앞 블록 부수기
@@ -87,5 +92,16 @@ object AlphaRules {
         else -> 1.0
     }
 
-    fun speedPerTick(ticksSinceHit: Int): Double = if (ticksSinceHit < SLOW_AFTER_HIT_TICKS) SLOW_SPEED_PER_TICK else SPEED_PER_TICK
+    /** 늘 같은 속도(2026-11-22: 공격 뒤 감속 삭제). */
+    fun speedPerTick(@Suppress("UNUSED_PARAMETER") ticksSinceHit: Int = 0): Double = SPEED_PER_TICK
+
+    fun rainbowColor(tick: Long): String = RAINBOW[((tick / RAINBOW_STEP_TICKS) % RAINBOW.size).toInt()]
+
+    /** 엔드 도착 후보: 대상 둘레 고리 위 점들(가까운 쪽부터). 모드는 차례로 설 수 있는지(아래 블록·머리 공간) 보고, 하나도 없으면 대상 바로 뒤 4블록. */
+    fun endArrivalCandidates(random: Random, tx: Double, tz: Double): List<Pair<Double, Double>> =
+        (0 until END_TRIES).map {
+            val a = random.nextDouble(0.0, 2 * Math.PI)
+            val r = END_RING_MIN + (END_RING_MAX - END_RING_MIN) * it / (END_TRIES - 1)
+            Pair(tx + Math.cos(a) * r, tz + Math.sin(a) * r)
+        }
 }

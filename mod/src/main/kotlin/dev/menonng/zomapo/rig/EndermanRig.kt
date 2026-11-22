@@ -1,85 +1,28 @@
 package dev.menonng.zomapo.rig
 
 import dev.menonng.zomapo.gimmick.VoidDescent
-import net.minecraft.server.level.ServerLevel
 import net.minecraft.util.Mth
-import net.minecraft.world.effect.MobEffectInstance
-import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.monster.Enderman
-import org.joml.Vector3f
-import java.util.WeakHashMap
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
- * 공허 붕괴체(좀비화 엔더맨)의 리그. 평소에는 바닐라 EndermanModel 과 같은 식(걷기·블록 들기·화난 입)으로 움직이고,
- * 공허 강림 집중 중에는 피들스틱 궁극기 집중 자세: 상체를 뒤로 젖히며 고개를 들고, 한 팔은 위로·한 팔은 옆으로 크게 벌린다.
- * 머리 표시는 바닐라 머리보다 6% 크게 그려, 투명한 진짜 엔더맨의 빛나는 눈(눈 레이어는 투명해도 그려진다)을 가린다.
+ * 공허 붕괴체(좀비화 엔더맨)의 동작. 평소에는 바닐라 HumanoidModel + EndermanModel 식(걷기·블록 들기·화난 입),
+ * 공허 강림 집중 중에는 피들스틱 궁극기 집중 자세를 **모델로만** 취한다: 상체·고개를 뒤로 젖히고 한 팔은 위·한 팔은 옆으로
+ * 벌리며 떠올라 떨고, 빠진 턱이 더 벌어지고, 등 뒤에 접혀 있던 공허 날개(모델 뼈대 left_wing·right_wing)가 펼쳐진다.
+ * 가슴 구멍 속 핵은 모델의 속 큐브가 스스로 빛난다. 입자·떠다니는 표시 엔티티는 쓰지 않는다.
+ * 머리 표시는 바닐라 머리보다 6% 크게(뼈대 정의 scale), 투명해도 그려지는 진짜 엔더맨의 눈 레이어를 덮는다.
  */
 object EndermanRig {
-    val DEF = RigDef(
-        "enderman",
-        listOf(
-            BoneDef("head", Vector3f(0f, -13f, 0f), scale = 1.06f),
-            BoneDef("hat", Vector3f(0f, 0f, 0f), parent = "head"),
-            BoneDef("body", Vector3f(0f, -14f, 0f)),
-            BoneDef("right_arm", Vector3f(-5f, -12f, 0f)),
-            BoneDef("left_arm", Vector3f(5f, -12f, 0f)),
-            BoneDef("right_leg", Vector3f(-2f, -5f, 0f)),
-            BoneDef("left_leg", Vector3f(2f, -5f, 0f)),
-        ),
-        upper = setOf("head", "body", "right_arm", "left_arm"), hip = Vector3f(0f, -4f, 0f),
-    )
-    const val VIEW = 48.0
-
-    private class State(val rig: RigInstance, val pose: Pose = Pose(DEF))
-    private val rigs = WeakHashMap<Enderman, State>()
-
-    fun hasRig(e: Enderman): Boolean = rigs[e]?.rig?.alive == true
-
-    fun forget(e: Enderman) {
-        rigs.remove(e)?.rig?.discard()
-        e.removeEffect(MobEffects.INVISIBILITY)
-    }
-
-    /** 순간이동처럼 위치가 크게 바뀌면 미끄러지지 않게 새로 띄운다. */
-    fun snap(e: Enderman) {
-        rigs.remove(e)?.rig?.discard()
-    }
-
-    fun tick(level: ServerLevel, e: Enderman) {
-        val viewer = level.players().any { !it.isSpectator && it.distanceToSqr(e) < VIEW * VIEW }
-        var s = rigs[e]
-        if (!viewer) {
-            if (s != null) forget(e)
-            return
-        }
-        if (s != null && (!s.rig.alive || s.rig.lastPos.distanceToSqr(e.position()) > 16.0)) {
-            s.rig.discard(); s = null
-        }
-        if (s == null) {
-            s = State(RigInstance(DEF, level, e.position()))
-            rigs[e] = s
-        }
-        if (!e.hasEffect(MobEffects.INVISIBILITY)) e.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, -1, 0, false, false, false))
-        val p = s.pose
-        p.reset()
-        val age = e.tickCount.toFloat()
+    fun animate(e: Enderman, p: Pose, age: Float) {
         vanilla(e, p, age)
         VoidDescent.channelProgress(e)?.let { channel(p, it, age) }
-        VoidDescent.burstProgress(e)?.let { burst(p, it, age) }
-        if (e.deathTime > 0) {
-            val f = min(1f, sqrt((e.deathTime - 1f) / 20f * 1.6f).let { if (it.isNaN()) 0f else it })
-            p.root.rotateZ(Math.toRadians(f * 90.0).toFloat())
-        }
-        s.rig.apply(e.position(), e.yBodyRot, p)
-        VoidDescent.decorate(level, e, s.rig, p)
+        VoidDescent.burstProgress(e)?.let { burst(p, it) }
+        if (p.has("left_wing") && (p.scale["left_wing"] ?: 0f) == 0f) { p.scale["left_wing"] = 0f; p.scale["right_wing"] = 0f }
     }
 
-    /** 바닐라 HumanoidModel + EndermanModel.setupAnim 과 같은 식. */
     private fun vanilla(e: Enderman, p: Pose, age: Float) {
         val head = p.r("head")
         head.y = Math.toRadians(Mth.wrapDegrees(e.yHeadRot - e.yBodyRot).toDouble()).toFloat()
@@ -105,7 +48,7 @@ object EndermanRig {
 
     private fun smooth(t: Float): Float { val x = Mth.clamp(t, 0f, 1f); return x * x * (3 - 2 * x) }
 
-    /** 집중(피들스틱 궁극기 순간이동 전까지의 동작): 젖히고 → 벌리고 → 떨며 떠오른다. */
+    /** 집중(피들스틱 궁극기 순간이동 전까지): 젖히고 → 벌리고 → 날개를 펴며 떨고 떠오른다. */
     private fun channel(p: Pose, t: Float, age: Float) {
         val e = smooth(t / 0.35f)
         val shake = if (t > 0.3f) sin(age * 2.7f) * 0.06f * smooth((t - 0.3f) / 0.2f) else 0f
@@ -122,14 +65,22 @@ object EndermanRig {
         p.o("hat").y = 5f + 2.5f * e          // 빠진 턱이 더 크게 벌어진다
         p.o("head").y = -5f
         p.lift.y = 0.4f * e + 0.06f * sin(age * 0.35f) * e
+        // 등 뒤 공허 날개: 접힌(크기 0) 상태에서 펼쳐지며 위로 치켜든다
+        val w = smooth((t - 0.15f) / 0.45f)
+        if (p.has("left_wing")) {
+            p.scale["left_wing"] = 1.8f * w; p.scale["right_wing"] = 1.8f * w
+            p.r("left_wing").z = -0.95f * w - shake; p.r("left_wing").y = -0.5f * w
+            p.r("right_wing").z = 0.95f * w + shake; p.r("right_wing").y = 0.5f * w
+        }
     }
 
-    /** 순간이동 직후 0.5초: 벌렸던 팔이 앞으로 휘감기며 내려온다. */
-    private fun burst(p: Pose, t: Float, age: Float) {
+    /** 순간이동 직후 0.5초: 벌렸던 팔이 앞으로 휘감기며 대상을 덮친다, 날개는 접힌다. */
+    private fun burst(p: Pose, t: Float) {
         val e = 1f - smooth(t)
         val ra = p.r("right_arm"); val la = p.r("left_arm")
-        ra.x = Mth.lerp(e, ra.x, -1.3f); ra.z = Mth.lerp(e, ra.z, 0.9f)
-        la.x = Mth.lerp(e, la.x, -1.3f); la.z = Mth.lerp(e, la.z, -0.9f)
+        ra.x = Mth.lerp(e, ra.x, -1.4f); ra.z = Mth.lerp(e, ra.z, 0.7f)
+        la.x = Mth.lerp(e, la.x, -1.4f); la.z = Mth.lerp(e, la.z, -0.7f)
         p.lean = 0.25f * e
+        if (p.has("left_wing")) { p.scale["left_wing"] = e * 1.4f; p.scale["right_wing"] = e * 1.4f }
     }
 }

@@ -298,10 +298,43 @@ def enderman():
     ]
     d['layered'][0]['wall_paint'] = wall_paint(ramp('#3A342A', '#5A5242', '#7C7462', '#A59B84', '#C9BFA8', '#E2DBC6'))   # 잘린 두개골 단면
     d['layered'][1]['wall_paint'] = wall_paint(ramp('#060408', '#0C0712', '#140A1E', '#1E0F2C', '#2A1440', '#3A1C58'))   # 공허빛 몸속
-    d['emissive_inner'] = {'body': 12}   # 리그: 가슴 구멍 속 핵이 스스로 빛난다(속 큐브 전체가 빛나도 보이는 곳은 구멍뿐)
+    d['emissive_inner'] = {'body': 12}
+    # 공허 날개: 집중 때만 펼치는 모델 뼈대(평소 크기 0, 리그 EndermanRig). 등 위쪽 양옆에 붙은 찢긴 공허 막 세 갈래
+    d['extra_bones'] = [dict(name='left_wing', parent='body', pivot=[1.5, 2.5, 2.1]), dict(name='right_wing', parent='body', pivot=[-1.5, 2.5, 2.1])]
+    d['hidden_bones'] = ['left_wing', 'right_wing']
+    d['adds'] = d['adds'] + [
+        A('left_wing', [0.0, -1.3, 0.0], [12.0, 2.6, 0.0], void_wing),
+        A('left_wing', [0.0, -5.6, 0.0], [10.0, 2.2, 0.0], void_wing, rot=('z', -30, [0.0, -4.5, 0.0])),
+        A('left_wing', [0.0, 1.4, 0.0], [8.0, 2.0, 0.0], void_wing, rot=('z', 25, [0.0, 2.4, 0.0])),
+        A('right_wing', [-12.0, -1.3, 0.0], [12.0, 2.6, 0.0], void_wing),
+        A('right_wing', [-10.0, -5.6, 0.0], [10.0, 2.2, 0.0], void_wing, rot=('z', 30, [0.0, -4.5, 0.0])),
+        A('right_wing', [-8.0, 1.4, 0.0], [8.0, 2.0, 0.0], void_wing, rot=('z', -25, [0.0, 2.4, 0.0])),
+    ]   # 리그: 가슴 구멍 속 핵이 스스로 빛난다(속 큐브 전체가 빛나도 보이는 곳은 구멍뿐)
     d['view'] = (-30, -24)
     d['concept'] = '공허 붕괴체: 찢긴 정수리 속 한 겹 들어간 큰 뇌, 갈비뼈 너머 빛나는 보라 핵(두 겹), 보라 균열과 떠다니는 조각, 빠진 턱'
     return d
+
+
+def void_wing(img, faces, seed):
+    """공허 날개 막: 거의 검은 보라 막에 빛나는 보라 핏줄, 끝과 아래 가장자리가 찢겨 있다."""
+    rr = random.Random(seed)
+    MEM = ramp('#07040B', '#0E0716', '#170B24', '#221034', '#2E1646')
+    VEIN = ramp('#5C1E85', '#9238C4', '#D07EFA')
+    for face, (x0, y0, w, h) in faces.items():
+        for y in range(h):
+            for x in range(w):
+                t = 0.25 + 0.5 * (1 - abs(y - h / 2) / max(1, h / 2)) - 0.25 * x / max(1, w)
+                put(img, x0 + x, y0 + y, pick(MEM, t + rr.uniform(-0.08, 0.08), x, y))
+        vy = h // 2
+        for x in range(w):
+            if rr.random() < 0.25:
+                vy = max(0, min(h - 1, vy + rr.choice((-1, 1))))
+            put(img, x0 + x, y0 + vy, VEIN[2 if x < w * 0.3 else 1 if x < w * 0.7 else 0])
+        for x in range(w):   # 찢긴 아래 가장자리와 끝
+            if rr.random() < 0.35 or x > w * 0.82 and rr.random() < 0.6:
+                put(img, x0 + x, y0 + h - 1, (0, 0, 0, 0))
+            if x > w * 0.9 and rr.random() < 0.5:
+                put(img, x0 + x, y0, (0, 0, 0, 0))
 
 
 # ================================================================== 가디언: 찢긴 옆구리 속 빈 몸(두 겹)
@@ -495,11 +528,22 @@ def magma_cube():
 
     def base(img, data):
         zombify_1x(img, 'warm', seed=hash('slime/magmacube.png') & 0xffff)
+        # 속: 층 사이로 보이는 핵 = 숯이 된 심장(갈라진 틈마다 불씨). 껍질 층 안쪽 면은 그을린 살
+        core = bfaces(data, 'inside_cube')
+        CHAR = ramp('#120806', '#22100A', '#341810', '#4A2216')
+        rr = random.Random(71)
+        for face, r in core.items():
+            for y in range(r[3]):
+                for x in range(r[2]):
+                    put(img, r[0] + x, r[1] + y, pick(CHAR, 0.3 + rr.uniform(0, 0.5), x, y))
+            from paint import crack
+            crack(img, r, 72 + len(face), max(4, r[2]), dark=[R.FIREBALL[3], R.FIREBALL[4]], light=R.FIREBALL[5], branch=0.3)
     return dict(
         method='E', layer='minecraft:magma_cube#main', texture='slime/magmacube.png', base=base, view=(-35, 22),
-        concept='부패 마그마 큐브(1차 디자인): 그을음과 상처로 탁해진 껍질 층, 층 사이로 삐져나온 탄 뼈와 살점',
+        inner_pose={f'cube{i}': (0, -(4 - i) * 1.7, 0, 0, 0, 0) for i in range(8)},
+        concept='부패 마그마 큐브(1차 디자인): 그을음과 상처로 탁해진 껍질 층, 층 사이로 삐져나온 탄 뼈와 살점, 속에는 숯이 된 심장(갈라진 틈마다 불씨)',
         adds=[
-            A('cube3', [3.6, 19.0, -1.2], [1.6, 1.0, 2.4], bone, tell='층 사이 틈: 착지 직전 푸르게 빛나고 혼불 불씨가 튄다'),
+            A('cube3', [3.6, 19.0, -1.2], [1.6, 1.0, 2.4], bone, tell='불씨 착지: 착지 직전 층 사이가 밝아지고 탄 뼈 사이로 불씨가 샌다'),
             A('cube5', [-5.2, 21.0, 0.4], [1.6, 1.0, 1.8], bone),
             A('cube1', [-1.0, 16.6, -5.0], [2.0, 1.4, 1.2], bone),
             A('cube7', [-1.5, 23.6, -1.0], [3.0, 0.8, 2.0], flesh),
@@ -935,10 +979,52 @@ DESIGNS.update({
 _shulker3 = D3.DESIGNS['shulker']
 
 
+def shulker_inner(img, data):
+    """속(뚜껑이 열리면 보이는 곳): 아랫판 윗면·뚜껑 아랫면은 썩은 속살과 고름(가장자리는 껍데기 단면), 머리는 좀비처럼."""
+    lid, base, head = bfaces(data, 'lid'), bfaces(data, 'base'), bfaces(data, 'head')
+    FLESHIN = ramp('#2A1618', '#4A2428', '#6E3A3A', '#8E5250', '#B0706A')
+    SHELL = ramp('#2E1C34', '#47304F', '#62466C')
+    PUS = ramp('#4E5A18', '#7A8A22', '#B4C24A')
+    rr = random.Random(531)
+    for rect in (base['up'], lid['down']):
+        x0, y0, w, h = rect
+        for y in range(h):
+            for x in range(w):
+                edge = min(x, y, w - 1 - x, h - 1 - y)
+                if edge < 1:
+                    put(img, x0 + x, y0 + y, pick(SHELL, 0.5, x, y))
+                else:
+                    t = 0.35 + 0.35 * (1 - abs(x - w / 2) / (w / 2)) * (1 - abs(y - h / 2) / (h / 2)) + rr.uniform(-0.1, 0.1)
+                    put(img, x0 + x, y0 + y, pick(FLESHIN, t, x, y))
+        for _ in range(5):
+            cx, cy = x0 + rr.randrange(2, w - 2), y0 + rr.randrange(2, h - 2)
+            put(img, cx, cy, PUS[2]); put(img, cx + 1, cy, PUS[1]); put(img, cx, cy + 1, PUS[0])
+        for _ in range(3):
+            put(img, x0 + rr.randrange(2, w - 2), y0 + rr.randrange(2, h - 2), FLESHIN[0])
+    # 머리: 썩은 회녹색 살, 왼쪽 병든 눈, 오른쪽 아래 드러난 턱뼈
+    SKIN = ramp('#2E3428', '#454E3A', '#5E6A50', '#7A8668')
+    for face, r in head.items():
+        for y in range(r[3]):
+            for x in range(r[2]):
+                put(img, r[0] + x, r[1] + y, pick(SKIN, 0.35 + rr.uniform(0, 0.4), x, y))
+    f = head['front']
+    put(img, f[0] + 1, f[1] + 2, R.SICK_EYE[3]); put(img, f[0] + 2, f[1] + 2, R.SICK_EYE[2])
+    put(img, f[0] + 4, f[1] + 2, (0x14, 0x10, 0x10, 255))
+    for x in range(3, 6):
+        put(img, f[0] + x, f[1] + 4, R.BONE[4] if x % 2 else R.BONE[2])
+    put(img, f[0] + 4, f[1] + 5, R.BONE[3])
+
+
 def shulker():
-    """셜커: 3차 그대로(1배). 2배로 칠하면 지의류 무늬가 잘게 부서져 3차가 더 낫다."""
+    """셜커: 3차 그대로(1배)에 속(열리면 보이는 속살·좀비 머리)을 그린다. 2배로 칠하면 지의류 무늬가 잘게 부서져 3차가 더 낫다."""
     d = _shulker3()
     d['hires'] = 1
+    base = d['base']
+    d['base'] = lambda img, data: (base(img, data), shulker_inner(img, data))
+    d['inner_pose'] = {'lid': (0, -9, 0, 0, 22.5, 0)}
+    d['inner_view_pitch'] = 30
+    d['concept'] = d['concept'].replace('중력 셜커', '가시 셜커') + ' · 뚜껑이 열리면 썩은 속살과 고름, 좀비처럼 썩은 머리'
+    d['tell'] = '가시 껍데기: 닫혀 있을 때 근접으로 치면 껍데기 틈의 뼈 가시에 찔린다'
     return d
 
 

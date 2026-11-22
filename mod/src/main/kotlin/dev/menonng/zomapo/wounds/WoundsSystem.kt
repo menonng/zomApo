@@ -25,6 +25,8 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.BossEvent
+import net.minecraft.world.effect.MobEffectInstance
+import net.minecraft.world.effect.MobEffects
 import net.minecraft.world.entity.ai.attributes.AttributeModifier
 import net.minecraft.world.entity.ai.attributes.Attributes
 import net.minecraft.world.item.ItemStack
@@ -66,9 +68,19 @@ object WoundsSystem {
     /** 발열 이상에서 매 틱 더하는 허기 소모(바닐라 걷기·싸움 평균의 약 절반). */
     private const val FEVER_EXHAUSTION = 0.0025f
 
+    /** 하트 표시용으로 바닐라 위더를 걸 때 켠다(진짜 위더 가로채기 믹스인이 건너뛰게). */
+    var internalAdd = false
+    private val realWither = HashMap<UUID, IntArray>()   // 진짜 위더: [증폭, 남은 틱]
+    private val realPoison = HashMap<UUID, IntArray>()   // 진짜 독: [증폭, 남은 틱]
+
     fun register() {
         ServerTickEvents.END_SERVER_TICK.register { server ->
-            for (p in server.playerList.players) tick(p)
+            for (p in server.playerList.players) {
+                tick(p)
+                witherTick(p)
+                poisonTick(p)
+                hearts(p)
+            }
         }
         ServerPlayerEvents.AFTER_RESPAWN.register { _, newPlayer, alive ->
             if (!alive) {
@@ -77,7 +89,81 @@ object WoundsSystem {
             }
             WoundHud.refresh(newPlayer, state(newPlayer))
         }
-        ServerPlayConnectionEvents.DISCONNECT.register { handler, _ -> WoundHud.remove(handler.player) }
+        ServerPlayConnectionEvents.DISCONNECT.register { handler, _ -> WoundHud.remove(handler.player); realWither.remove(handler.player.uuid); realPoison.remove(handler.player.uuid) }
+        // 감염으로 빌린 '얼어붙음'은 가루눈 밖이면 동상 피해를 주지 않는다
+        net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register { e, src, _ ->
+            !(e is ServerPlayer && src.`is`(net.minecraft.world.damagesource.DamageTypes.FREEZE) && !e.isInPowderSnow && borrowsFrozen(e))
+        }
+    }
+
+    /**
+     * 하트 그림(바닐라 클라이언트는 독·위더·얼어붙음일 때만 하트를 바꾼다). 세 자리를 모두 상처가 빌린다(리소스팩 그림):
+     * - 출혈만 = 위더 자리(금 간 하트), 감염만 = 얼어붙음 자리(썩어 가는 하트), 둘 다 = 독 자리(금 가고 썩은 하트).
+     *   바닐라 순서가 독 > 위더 > 얼어붙음이라, 둘이 같이 걸려도 '둘 다' 하트가 보인다.
+     * - 하트용 위더·독은 숨겨서 걸고 피해를 막는다(WitherTickMixin·PoisonTickMixin). 감염의 얼어붙음은 가루눈 밖이면 감속·동상 없음.
+     * - 플레이어가 받는 진짜 독·위더는 zomApo 가 같은 피해로 대신 처리하고 상태 줄에 글자로 보인다(WoundHeartsMixin).
+     */
+    private fun hearts(p: ServerPlayer) {
+        if (!p.isAlive) return
+        val s = state(p)
+        val both = s.bleeding && s.infected
+        show(p, MobEffects.WITHER, s.bleeding && !both)
+        show(p, MobEffects.POISON, both)
+        if (s.infected) p.ticksFrozen = p.ticksRequiredToFreeze
+    }
+
+    private fun show(p: ServerPlayer, effect: net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect>, want: Boolean) {
+        val e = p.getEffect(effect)
+        if (want) {
+            if (e == null || e.duration < 20) {
+                internalAdd = true
+                try { p.addEffect(MobEffectInstance(effect, 60, 0, true, false, false)) } finally { internalAdd = false }
+            }
+        } else if (e != null) p.removeEffect(effect)
+    }
+
+    fun borrowsFrozen(p: ServerPlayer): Boolean = state(p).infected
+
+    /** 진짜 위더(위더 스켈레톤·위더 장미·위더)는 같은 피해를 zomApo 가 준다. 상태 표시줄에 '위더'로 보인다. */
+    fun realWither(p: ServerPlayer, amplifier: Int, duration: Int) {
+        val cur = realWither[p.uuid]
+        if (cur == null || amplifier > cur[0] || (amplifier == cur[0] && duration > cur[1])) realWither[p.uuid] = intArrayOf(amplifier, duration)
+        WoundHud.refresh(p, state(p))
+    }
+
+    fun witherOf(p: ServerPlayer): IntArray? = realWither[p.uuid]
+    fun poisonOf(p: ServerPlayer): IntArray? = realPoison[p.uuid]
+
+    /** 진짜 독(동굴 거미·물약·복어 등)도 같은 피해(체력 1 아래로는 안 내려감)를 zomApo 가 준다. 상태 줄에 '독'. */
+    fun realPoison(p: ServerPlayer, amplifier: Int, duration: Int) {
+        val cur = realPoison[p.uuid]
+        if (cur == null || amplifier > cur[0] || (amplifier == cur[0] && duration > cur[1])) realPoison[p.uuid] = intArrayOf(amplifier, duration)
+        WoundHud.refresh(p, state(p))
+    }
+
+    private fun poisonTick(p: ServerPlayer) {
+        val w = realPoison[p.uuid] ?: return
+        if (!p.isAlive) { realPoison.remove(p.uuid); WoundHud.refresh(p, state(p)); return }
+        w[1]--
+        val interval = maxOf(1, 25 shr w[0])
+        if (w[1] % interval == 0 && p.health > 1f) p.hurtServer(p.level(), p.damageSources().magic(), 1f)
+        if (w[1] <= 0) realPoison.remove(p.uuid)
+        if (w[1] % 10 == 0 || w[1] <= 0) WoundHud.refresh(p, state(p))
+    }
+
+    /** 우유를 마시면 진짜 독·위더도 풀린다(바닐라처럼). */
+    fun clearReal(p: ServerPlayer) {
+        if (realWither.remove(p.uuid) != null || realPoison.remove(p.uuid) != null) WoundHud.refresh(p, state(p))
+    }
+
+    private fun witherTick(p: ServerPlayer) {
+        val w = realWither[p.uuid] ?: return
+        if (!p.isAlive) { realWither.remove(p.uuid); WoundHud.refresh(p, state(p)); return }
+        w[1]--
+        val interval = maxOf(1, 40 shr w[0])
+        if (w[1] % interval == 0) p.hurtServer(p.level(), p.damageSources().wither(), 1f)
+        if (w[1] <= 0) realWither.remove(p.uuid)
+        if (w[1] % 10 == 0 || w[1] <= 0) WoundHud.refresh(p, state(p))
     }
 
     fun state(p: ServerPlayer): WoundState = p.getAttached(WOUNDS) ?: WoundState()
@@ -118,9 +204,9 @@ object WoundsSystem {
     fun onConsume(p: ServerPlayer, stack: ItemStack) {
         if (!ZomItems.isAntidote(stack)) return
         if (cure(p, Infection.Removal.ANTIDOTE)) {
-            p.sendSystemMessage(Component.literal("몸속의 열이 가라앉는다. 감염이 풀렸다.").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))))
+            p.sendSystemMessage(Component.literal("몸속의 열이 가라앉습니다. 감염이 풀렸습니다.").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))))
         } else {
-            p.sendSystemMessage(Component.literal("쓴맛만 남았다. 감염되어 있지 않았다.").withStyle(ChatFormatting.GRAY))
+            p.sendSystemMessage(Component.literal("쓴맛만 남습니다. 감염되어 있지 않았습니다.").withStyle(ChatFormatting.GRAY))
         }
     }
 
@@ -175,8 +261,8 @@ object WoundsSystem {
     }
 
     private fun stageMessage(stage: InfectionStage): Component = when (stage) {
-        InfectionStage.FEVER -> Component.literal("열이 오른다. 배가 빨리 고프고 상처가 더디게 아문다.")
-        InfectionStage.WORSENING -> Component.literal("기침이 멎지 않는다. 몸이 무겁다. 해독제가 필요하다.")
+        InfectionStage.FEVER -> Component.literal("열이 오릅니다. 배가 빨리 고프고 상처가 더디게 아뭅니다.")
+        InfectionStage.WORSENING -> Component.literal("기침이 멎지 않습니다. 몸이 무겁습니다. 해독제가 필요합니다.")
         InfectionStage.INCUBATION -> Component.literal("")
     }.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44)))
 
@@ -216,27 +302,37 @@ object WoundHud {
 
     private fun roman(n: Int) = when (n) { 1 -> "I"; 2 -> "II"; else -> "III" }
 
-    fun text(s: WoundState): Component? {
-        if (s.empty) return null
+    fun text(s: WoundState, wither: IntArray? = null, poison: IntArray? = null): Component? {
+        if (s.empty && wither == null && poison == null) return null
         val line = Component.empty()
         if (s.bleeding) {
             val sec = (s.bleedTicks + 19) / 20
             line.append(icon(ICON_BLEEDING)).append(
-                Component.literal(" 출혈 %d:%02d".format(sec / 60, sec % 60)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFF4D6D))),
+                Component.literal(" 출혈 %d:%02d".format(sec / 60, sec % 60)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFF0045))),
             )
         }
         if (s.infected) {
             if (s.bleeding) line.append(Component.literal("    "))
             val stage = Infection.stage(s.infectedTicks)
             line.append(icon(ICON_INFECTION)).append(
-                Component.literal(" 감염 ${roman(stage.ordinal + 1)} · ${stage.label}").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x7FD36E))),
+                Component.literal(" 감염 ${roman(stage.ordinal + 1)} · ${stage.label}").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))),
             )
+        }
+        if (poison != null) {
+            if (!s.empty) line.append(Component.literal("    "))
+            val sec = (poison[1] + 19) / 20
+            line.append(Component.literal("독 ${roman(poison[0] + 1)} %d:%02d".format(sec / 60, sec % 60)).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))))
+        }
+        if (wither != null) {
+            if (!s.empty || poison != null) line.append(Component.literal("    "))
+            val sec = (wither[1] + 19) / 20
+            line.append(Component.literal("위더 ${roman(wither[0] + 1)} %d:%02d".format(sec / 60, sec % 60)).withStyle(ChatFormatting.GRAY))
         }
         return line
     }
 
     fun refresh(p: ServerPlayer, s: WoundState) {
-        val t = text(s)
+        val t = text(s, WoundsSystem.witherOf(p), WoundsSystem.poisonOf(p))
         if (t == null) { remove(p); return }
         val key = t.string
         val bar = bars.getOrPut(p.uuid) {

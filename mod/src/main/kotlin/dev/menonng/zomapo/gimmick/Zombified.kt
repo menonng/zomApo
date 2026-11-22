@@ -13,7 +13,7 @@ import net.minecraft.tags.DamageTypeTags
 import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Enderman
 import net.minecraft.world.entity.monster.Phantom
-import dev.menonng.zomapo.rig.EndermanRig
+import dev.menonng.zomapo.rig.RigSystem
 import dev.menonng.zomapo.rig.RiderPuppet
 import dev.menonng.zomapo.rig.RigInstance
 import java.util.Collections
@@ -42,10 +42,12 @@ object Zombified {
         ServerEntityEvents.ENTITY_LOAD.register { e, _ -> if (e is Mob && e.getAttached(LEVEL) != null) loaded += e }
         ServerEntityEvents.ENTITY_UNLOAD.register { e, _ ->
             if (e is Mob) loaded -= e
-            if (e is Enderman) { VoidDescent.forget(e); EndermanRig.forget(e) }
-            if (e is Phantom) RiderPuppet.forget(e)
+            if (e is Enderman) VoidDescent.forget(e)
+            if (e is Phantom) { RiderPuppet.forget(e); CorpseCarrier.forget(e) }
+            if (e is Mob) RigSystem.forget(e)
         }
         RigInstance.register()
+        RiderPuppet.register()
         ServerTickEvents.END_LEVEL_TICK.register { level -> tick(level) }
         // 시체 운반자가 내려놓은 승객은 낙하 피해를 받지 않는다
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, _ ->
@@ -62,13 +64,14 @@ object Zombified {
             if (mob.level() !== level) continue
             if (!mob.isAlive) {
                 VoidDescent.forget(mob); CorpseCarrier.forget(mob); RiderPuppet.forget(mob as? Phantom)
-                if (mob is Enderman) EndermanRig.tick(level, mob)      // 쓰러지는 20틱 동안 리그도 옆으로 쓰러진다
+                RigSystem.tick(level, mob)      // 쓰러지는 20틱 동안 리그도 옆으로 쓰러지고 붉게
                 continue
             }
             when (mob) {
-                is Enderman -> { VoidDescent.tick(level, mob); EndermanRig.tick(level, mob) }
+                is Enderman -> VoidDescent.tick(level, mob)
                 is Phantom -> { CorpseCarrier.tick(level, mob); RiderPuppet.tick(level, mob) }
             }
+            RigSystem.tick(level, mob)
         }
     }
 }

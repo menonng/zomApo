@@ -44,7 +44,7 @@ object ZomCommands {
                         .then(Commands.literal("bleeding").executes { ctx ->
                             val list = targets(ctx)
                             list.forEach { WoundsSystem.bleed(it) }
-                            ctx.source.sendSuccess({ Component.literal("출혈 ${Bleeding.DURATION_TICKS / 20}초: ${list.size}명") }, true)
+                            ctx.source.sendSuccess({ Component.literal("${list.size}명에게 출혈 ${Bleeding.DURATION_TICKS / 20}초를 걸었습니다.") }, true)
                             list.size
                         })
                         .then(Commands.literal("infection")
@@ -62,7 +62,7 @@ object ZomCommands {
                             WoundsSystem.stopBleeding(it)
                             WoundsSystem.cure(it, Infection.Removal.COMMAND)
                         }
-                        ctx.source.sendSuccess({ Component.literal("상처 지움: ${list.size}명") }, true)
+                        ctx.source.sendSuccess({ Component.literal("${list.size}명의 상처를 지웠습니다.") }, true)
                         list.size
                     },
                 ),
@@ -76,7 +76,7 @@ object ZomCommands {
         }
         val list = targets(ctx)
         list.forEach { WoundsSystem.infect(it, start) }
-        ctx.source.sendSuccess({ Component.literal("감염 ${stage}단계: ${list.size}명") }, true)
+        ctx.source.sendSuccess({ Component.literal("${list.size}명에게 감염 ${stage}단계를 걸었습니다.") }, true)
         return list.size
     }
 
@@ -99,7 +99,7 @@ object ZomCommands {
         for (p in list) {
             p.inventory.placeItemBackInInventory(make(count), net.minecraft.util.Prediction.SERVER_ONLY)
         }
-        ctx.source.sendSuccess({ Component.literal("지급: ${list.size}명") }, true)
+        ctx.source.sendSuccess({ Component.literal("${list.size}명에게 지급했습니다.") }, true)
         return list.size
     }
 
@@ -109,6 +109,8 @@ object ZomCommands {
      * - `/zomapo debug enderman still` : 6블록 앞에 가만히 선 공허 붕괴체(AI 없음, 리그 확인용)
      * - `/zomapo debug phantom` : 머리 위 14블록에 좀비를 태운 시체 운반자
      * - `/zomapo debug phantom empty` : 빈 시체 운반자(이번 급강하에 꼭 줍는다) + 앞에 좀비 하나
+     * - `/zomapo debug phantom kidnap` : 빈 시체 운반자(근처에 좀비가 없으면 대상을 납치한다)
+     * - `/zomapo debug rig <몹>` : 5블록 앞에 가만히 선 좀비화 몹(리그 확인용, 예: creeper, spider, ghast)
      */
     private fun debug(): LiteralArgumentBuilder<CommandSourceStack> =
         Commands.literal("debug")
@@ -124,7 +126,7 @@ object ZomCommands {
                 e.setPersistenceRequired()
                 level.addFreshEntity(e)
                 dev.menonng.zomapo.gimmick.Zombified.mark(e, 2)
-                ctx.source.sendSuccess({ Component.literal("가만히 선 공허 붕괴체") }, false)
+                ctx.source.sendSuccess({ Component.literal("가만히 선 공허 붕괴체를 만들었습니다.") }, false)
                 1
             }).executes { ctx ->
                 val p = ctx.source.playerOrException
@@ -140,14 +142,35 @@ object ZomCommands {
                 dev.menonng.zomapo.gimmick.Zombified.mark(e, 2)
                 e.target = p
                 dev.menonng.zomapo.gimmick.VoidDescent.armNow(e)
-                ctx.source.sendSuccess({ Component.literal("공허 붕괴체 생성") }, false)
+                ctx.source.sendSuccess({ Component.literal("공허 붕괴체를 만들었습니다.") }, false)
                 1
             })
             .then(Commands.literal("phantom")
                 .executes { ctx -> spawnCarrier(ctx, empty = false) }
-                .then(Commands.literal("empty").executes { ctx -> spawnCarrier(ctx, empty = true) }))
+                .then(Commands.literal("empty").executes { ctx -> spawnCarrier(ctx, empty = true) })
+                .then(Commands.literal("kidnap").executes { ctx -> spawnCarrier(ctx, empty = true, zombie = false) }))
+            .then(Commands.literal("rig").then(Commands.argument("mob", com.mojang.brigadier.arguments.StringArgumentType.word()).executes { ctx ->
+                val p = ctx.source.playerOrException
+                val level = p.level()
+                val id = com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "mob")
+                val type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(net.minecraft.resources.Identifier.withDefaultNamespace(id)).orElse(null)
+                val e = type?.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND) as? net.minecraft.world.entity.Mob
+                if (e == null) {
+                    ctx.source.sendFailure(Component.literal("몹을 찾을 수 없습니다: $id")); return@executes 0
+                }
+                val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+                e.snapTo(p.x + look.x * 5, p.y, p.z + look.z * 5, p.yRot + 180f, 0f)
+                e.yBodyRot = p.yRot + 180f
+                e.yHeadRot = p.yRot + 180f
+                e.isNoAi = true
+                e.setPersistenceRequired()
+                level.addFreshEntity(e)
+                dev.menonng.zomapo.gimmick.Zombified.mark(e, 3)
+                ctx.source.sendSuccess({ Component.literal("좀비화 몹을 만들었습니다: $id") }, false)
+                1
+            }))
 
-    private fun spawnCarrier(ctx: CommandContext<CommandSourceStack>, empty: Boolean): Int {
+    private fun spawnCarrier(ctx: CommandContext<CommandSourceStack>, empty: Boolean, zombie: Boolean = true): Int {
         val p = ctx.source.playerOrException
         val level = p.level()
         val ph = net.minecraft.world.entity.EntityTypes.PHANTOM.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
@@ -160,15 +183,17 @@ object ZomCommands {
         val z = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
         z.setPersistenceRequired()
         if (empty) {
-            z.snapTo(p.x + look.x * 8, p.y, p.z + look.z * 8, 0f, 0f)
-            level.addFreshEntity(z)
+            if (zombie) {
+                z.snapTo(p.x + look.x * 8, p.y, p.z + look.z * 8, 0f, 0f)
+                level.addFreshEntity(z)
+            }
             dev.menonng.zomapo.gimmick.CorpseCarrier.forcePickup(ph)
         } else {
             z.snapTo(ph.x, ph.y + 1, ph.z, 0f, 0f)
             level.addFreshEntity(z)
             z.startRiding(ph, true, true)
         }
-        ctx.source.sendSuccess({ Component.literal(if (empty) "빈 시체 운반자 생성" else "시체 운반자 생성") }, false)
+        ctx.source.sendSuccess({ Component.literal(if (empty) "빈 시체 운반자를 만들었습니다." else "시체 운반자를 만들었습니다.") }, false)
         return 1
     }
 }

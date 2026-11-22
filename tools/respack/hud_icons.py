@@ -1,4 +1,4 @@
-"""zomApo 리소스팩의 손그림 자산(HUD 아이콘 글꼴, 해독제·바이러스 결정 아이템, 투명 보스바)을 만든다.
+"""zomApo 리소스팩의 손그림 자산(HUD 아이콘 글꼴, 체력 하트, 감염 화면 가장자리, 해독제·바이러스 결정 아이템, 투명 보스바)을 만든다.
 
 바닐라 텍스처를 복사하지 않고 픽셀을 직접 찍는다. 결과는 저장소의 respack/ 아래에 쓴다.
     python3 tools/respack/hud_icons.py
@@ -155,6 +155,108 @@ def virus_crystal():
     return grid_image(rows, pal)
 
 
+# ---------------------------------------------------------------- 체력 하트(9×9): 출혈·감염
+# 바닐라 클라이언트는 독·위더·얼어붙음일 때만 하트 그림을 바꾼다. 그 세 자리를 zomApo 상처가 빌린다:
+#   위더 자리 = 출혈(금 간 하트), 얼어붙음 자리 = 감염(썩어 가는 하트), 독 자리 = 둘 다(금 가고 썩은 하트).
+# 플레이어가 받는 진짜 독·위더는 zomApo 가 대신 처리해 상태 줄에 글자로 보인다(하트는 상처 전용).
+
+HEART_CRACKED = [
+    ".........",
+    "..HR.RR..",
+    ".HRRKRRr.",
+    ".RRKRRRr.",
+    ".RRKKRRr.",
+    "..RRKRr..",
+    "...RKr...",
+    "....r....",
+    ".........",
+]
+HEART_CRACKED_PAL = {'R': hexc('#C8102E'), 'r': hexc('#860A1E'), 'H': hexc('#FF6A7E'), 'K': hexc('#2A0508')}
+
+HEART_INFECTED = [
+    ".........",
+    "..LG.GG..",
+    ".LGVGGNg.",
+    ".GGGVGGg.",
+    ".GNGVVGg.",
+    "..GGGVg..",
+    "...GVg...",
+    "....g....",
+    ".........",
+]
+HEART_INFECTED_PAL = {'G': hexc('#55604A'), 'g': hexc('#363D2F'), 'L': hexc('#8A967A'), 'V': hexc('#55BB44'), 'N': hexc('#16190F')}
+
+HEART_BOTH = [
+    ".........",
+    "..LG.GG..",
+    ".LGVKGNg.",
+    ".GGKVGGg.",
+    ".GNKKVGg.",
+    "..GGKVg..",
+    "...GKg...",
+    "....g....",
+    ".........",
+]
+HEART_BOTH_PAL = dict(HEART_INFECTED_PAL, K=hexc('#C8102E'))
+
+
+def heart_set(rows, pal, prefix):
+    """full/half 와 깜빡임(맞았을 때 밝게)·하드코어 변형까지 같은 그림으로."""
+    full = grid_image(rows, pal)
+    half = full.copy()
+    for y in range(9):
+        for x in range(5, 9):
+            half.putpixel((x, y), (0, 0, 0, 0))
+    def blink(im):
+        b = im.copy()
+        for y in range(9):
+            for x in range(9):
+                r, g, bb, a = b.getpixel((x, y))
+                if a:
+                    b.putpixel((x, y), (min(255, r + (255 - r) // 2), min(255, g + (255 - g) // 2), min(255, bb + (255 - bb) // 2), a))
+        return b
+    for hc in ('', 'hardcore_'):
+        save(full, f'assets/minecraft/textures/gui/sprites/hud/heart/{prefix}_{hc}full.png')
+        save(half, f'assets/minecraft/textures/gui/sprites/hud/heart/{prefix}_{hc}half.png')
+        save(blink(full), f'assets/minecraft/textures/gui/sprites/hud/heart/{prefix}_{hc}full_blinking.png')
+        save(blink(half), f'assets/minecraft/textures/gui/sprites/hud/heart/{prefix}_{hc}half_blinking.png')
+
+
+def infection_vignette(size=256):
+    """감염 중 화면 가장자리(바닐라 가루눈 서리 자리): 가장자리에서 안쪽으로 뻗는 가는 녹색 핏줄. 가운데는 비어 있다."""
+    import random
+    im = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    rr = random.Random(7)
+    c = size / 2
+    for k in range(46):
+        ang = rr.uniform(0, 2 * math.pi)
+        x, y = c + math.cos(ang) * c * 1.02, c + math.sin(ang) * c * 1.02
+        heading = math.atan2(c - y, c - x) + rr.uniform(-0.5, 0.5)
+        length = rr.uniform(size * 0.12, size * 0.26)
+        steps = int(length)
+        for i in range(steps):
+            t = i / max(1, steps)
+            heading += rr.uniform(-0.25, 0.25)
+            x += math.cos(heading); y += math.sin(heading)
+            if not (0 <= x < size and 0 <= y < size):
+                continue
+            a = int(150 * (1 - t))
+            col = (0x1E, 0x3A, 0x16, a) if i % 7 else (0x55, 0xBB, 0x44, a)
+            im.putpixel((int(x), int(y)), col)
+            if t < 0.4 and int(x) + 1 < size:
+                im.putpixel((int(x) + 1, int(y)), (0x1E, 0x3A, 0x16, a // 2))
+            if rr.random() < 0.04:
+                heading += rr.choice((-1, 1)) * 0.9
+    # 가장자리 아주 옅은 어둠
+    for y in range(size):
+        for x in range(size):
+            d = max(abs(x - c), abs(y - c)) / c
+            if d > 0.86:
+                r, g, b, a = im.getpixel((x, y))
+                im.putpixel((x, y), (r or 0x10, g or 0x18, b or 0x0C, max(a, int(70 * (d - 0.86) / 0.14))))
+    return im
+
+
 def main():
     write_json({"pack": {"description": "zomApo 서버 리소스팩", "min_format": 97, "max_format": 97}}, 'pack.mcmeta')
 
@@ -169,6 +271,11 @@ def main():
     clear = Image.new('RGBA', (182, 5), (0, 0, 0, 0))
     save(clear, 'assets/minecraft/textures/gui/sprites/boss_bar/white_background.png')
     save(clear, 'assets/minecraft/textures/gui/sprites/boss_bar/white_progress.png')
+
+    heart_set(HEART_CRACKED, HEART_CRACKED_PAL, 'withered')
+    heart_set(HEART_INFECTED, HEART_INFECTED_PAL, 'frozen')
+    heart_set(HEART_BOTH, HEART_BOTH_PAL, 'poisoned')
+    save(infection_vignette(), 'assets/minecraft/textures/misc/powder_snow_outline.png')
 
     save(antidote(), 'assets/zomapo/textures/item/antidote.png')
     save(virus_crystal(), 'assets/zomapo/textures/item/virus_crystal.png')

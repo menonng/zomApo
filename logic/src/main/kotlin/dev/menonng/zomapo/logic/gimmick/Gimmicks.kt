@@ -48,22 +48,22 @@ enum class Gimmick(val mob: String, val title: String, val skill: String, val in
     SPIDER("spider", "알집 거미", "거미줄 침", Interval.seconds(7.0, 13.0)),
     CAVE_SPIDER("cave_spider", "독샘 거미", "독샘 파열", null),
     CREEPER("creeper", "균사 크리퍼", "연쇄 포자", null),
-    ENDERMAN("enderman", "공허 붕괴체", "공허 강림", Interval.seconds(15.0, 30.0)),
+    ENDERMAN("enderman", "공허 붕괴체", "공허 강림(등 뒤)", null),
     CREAKING("creaking", "창백한 썩음", "늦은 굳기 · 시선이 끊길 때마다 가속", null),
     SLIME("slime", "늪 찌꺼기", "재결합 · 끈적한 착지", Interval.seconds(4.0, 7.0)),
     MAGMA_CUBE("magma_cube", "부패 마그마 큐브", "재결합 · 불씨 착지", Interval.seconds(4.0, 7.0)),
-    PHANTOM("phantom", "시체 운반자", "좀비화 몹 수송·투하", null),
+    PHANTOM("phantom", "시체 운반자", "수송·투하 · 납치", null),
     SILVERFISH("silverfish", "광산 좀벌레", "갉아먹기", null),
     ENDERMITE("endermite", "깜빡 진드기", "깜빡임", Interval.seconds(3.0, 6.0)),
-    PILLAGER("pillager", "표식 약탈자", "표식 화살", Interval.seconds(12.0, 20.0)),
-    VINDICATOR("vindicator", "도끼잡이", "도끼 투척", Interval.seconds(10.0, 16.0)),
+    PILLAGER("pillager", "소음 약탈자", "소음 화살 · 불어나는 정찰대", Interval.seconds(12.0, 20.0)),
+    VINDICATOR("vindicator", "도끼잡이", "도끼 투척 · 회수", Interval.seconds(20.0, 20.0)),
     ILLUSIONER("illusioner", "거울 환술사", "거울 교대", Interval.seconds(3.0, 6.0)),
     EVOKER("evoker", "강령 소환사", "강령술", Interval.seconds(20.0, 30.0)),
     WITCH("witch", "역병 마녀", "언데드 치유 · 역병 물약", Interval.seconds(4.0, 7.0)),
-    GUARDIAN("guardian", "익사체 지휘관", "지휘 광선", null),
-    ELDER_GUARDIAN("elder_guardian", "썩은 장로", "썩은 저주 · 익사체 부르기", Interval.seconds(40.0, 80.0)),
+    GUARDIAN("guardian", "익사체 지휘관", "지휘 광선 · 프리즈머린 몸", null),
+    ELDER_GUARDIAN("elder_guardian", "썩은 장로", "썩은 저주 · 익사체 부르기 · 프리즈머린 몸", Interval.seconds(40.0, 80.0)),
     BREEZE("breeze", "녹슨 바람", "흡입 돌풍", null),
-    SHULKER("shulker", "중력 셜커", "중력 교란", null),
+    SHULKER("shulker", "가시 셜커", "가시 껍데기", null),
     GHAST("ghast", "혼불 가스트", "울부짖음 · 터지는 위", null),
     BLAZE("blaze", "잿불 블레이즈", "꺼져 가는 불 · 재 구름", null),
     PIGLIN_BRUTE("piglin_brute", "진홍 브루트", "광폭 · 찢는 도끼", null),
@@ -99,14 +99,12 @@ object GimmickRules {
     const val EXPLOSION_POWER = 2.5f
     const val FUSE_TICKS = 40
 
-    // 공허 강림: 8~24블록, 1.5초 집중 → 대상 옆으로 → 반경 3 공허 소용돌이 2초(어둠 3초, 0.5초마다 1)
-    const val DESCENT_MIN = 8.0
-    const val DESCENT_MAX = 24.0
+    // 공허 강림: 화날 때(쳐다봄·맞음) 한 번. 1.5초 집중 → 거리와 상관없이 대상 등 뒤 1.8블록 → 그 뒤로는 순간이동 없이 쫓아 때림.
+    // 화가 풀리면(대상 없음 2초) 다시 쓸 수 있다. 집중 끝에 시야가 끊겼으면 실패하고 3초 뒤 다시
     const val DESCENT_CHANNEL_TICKS = 30
-    const val DESCENT_SWARM_TICKS = 40
-    const val DESCENT_RADIUS = 3.0
-    const val DESCENT_DAMAGE = 1.0f
-    const val DESCENT_DARKNESS_TICKS = 60
+    const val DESCENT_BEHIND = 1.8
+    const val DESCENT_CALM_TICKS = 40
+    const val DESCENT_RETRY_TICKS = 60
 
     // 시선이 끊길 때마다 가속(창백한 썩음): 겹당 +12%, 최대 3겹, 6초
     const val CREAK_STACK_SPEED = 0.12
@@ -117,13 +115,24 @@ object GimmickRules {
     // 재결합: 4블록 안 작은 개체끼리
     const val MERGE_RADIUS = 4.0
 
-    // 시체 운반자: 줍기 확률, 놓는 거리
+    // 시체 운반자: 줍기 확률, 놓는 거리. 한 번 실어 나른 좀비는 근처에 다른 좀비가 있으면 다시 들지 않는다.
+    // 8블록 안에 들 좀비가 없으면 대상 플레이어 납치: 급강하가 1.8블록 안에 닿으면 붙잡아 4초 또는 땅에서 14블록까지 올라가 놓는다
     const val PICKUP_CHANCE = 0.25
     const val DROP_HORIZONTAL = 6.0
+    const val KIDNAP_SCAN = 8.0
+    const val KIDNAP_REACH = 1.8
+    const val KIDNAP_TICKS = 80
+    const val KIDNAP_HEIGHT = 14.0
 
-    // 표식 화살: 대장은 항상, 나머지 20%. 표식 6초, 대상당 하나
-    const val MARK_CHANCE = 0.20
-    const val MARK_TICKS = 120
+    // 소음 화살: 대장은 항상, 나머지 20%가 소음 사수. 맞은 자리(사람·블록)에서 소음 24 → 좀비가 그쪽으로 몰려와 근처 누구든 공격
+    // (표식처럼 맞은 한 사람만 노리지 않는다. 여럿이 다니다 한 명이 맞아도 무리 전체가 위험)
+    const val NOISE_ARROW_CHANCE = 0.20
+    const val NOISE_ARROW_LEVEL = 24
+    // 불어나는 정찰대: 좀비화 정찰대가 생길 때 30% 로 1~2명 더, 대원마다 15% 로 변명자, 3% 로 소환사로 바뀐다(대장은 그대로)
+    const val PATROL_EXTRA_CHANCE = 0.30
+    val PATROL_EXTRA = Interval(1, 2)
+    const val PATROL_SWAP_VINDICATOR = 0.15
+    const val PATROL_SWAP_EVOKER = 0.03
 
     // 진홍 브루트: 찢는 손톱 특성 확정, 체력 절반 아래 광폭
     const val BRUTE_LACERATING = 1.0
@@ -161,14 +170,27 @@ object GimmickRules {
     const val BLINK_MIN = 2.0
     const val BLINK_MAX = 4.0
 
-    // 표식 화살: 표식 대상을 노리는 좀비 반경
-    const val MARK_CALL_RADIUS = 16.0
-
-    // 도끼잡이: 다가갈 수 없는 6~16블록 대상에게. 피해 6, 도끼는 5초 뒤 손으로 돌아옴(그동안 맨손 피해 절반)
-    const val AXE_MIN_RANGE = 6.0
+    // 도끼잡이(어려움 기준 최종 피해. 바닐라 어려움: 도끼 19.5, 맨손 7.5): 평소 맨손(11, 공격 속도 바닐라의 20%),
+    // 도끼를 들면 22.5. 고개를 뒤로 젖혔다(0.5초) 정수리에 박힌 도끼를 던진다(20, 처음 닿는 아무 대상 하나, 관통·광역 없음).
+    // 맞히면 그 대상을 최우선으로 한 번 더 치거나 죽인 뒤 도끼를 줍고, 빗나가면 떨어진 자리로 먼저 가서 줍는다.
+    // 주운 때부터 20초 쿨타임 동안 도끼를 들고 싸우고, 끝나기 3초 전 도끼를 다시 머리에 꽂는 동작 뒤 다시 던질 수 있다.
+    // 머리에서 도끼가 빠진 동안 그 자리에는 상흔이 남는다(머리 모델 바꿈)
+    const val AXE_MIN_RANGE = 5.0
     const val AXE_MAX_RANGE = 16.0
-    const val AXE_DAMAGE = 6.0f
-    const val AXE_RETURN_TICKS = 100
+    const val AXE_MELEE_DAMAGE = 22.5f
+    const val BARE_DAMAGE = 11.0f
+    const val AXE_THROW_DAMAGE = 20.0f
+    const val BARE_ATTACK_SPEED = 0.20
+    const val AXE_WINDUP_TICKS = 10
+    const val AXE_COOLDOWN_TICKS = 400
+    const val AXE_RESHEATHE_LEAD_TICKS = 60
+    /** 어려움 난이도는 몹 근접·투사 피해에 1.5 를 곱하므로, 속성·피해 값은 최종 값 ÷ 1.5 로 넣는다. */
+    const val HARD_SCALE = 1.5f
+
+    // 프리즈머린 몸(가디언·엘더 가디언): 좀비화로 원종 특징이 강해졌다. 곡괭이에 1.5배, 검에는 0.75배만 받고 검 내구도가 2배 빨리 닳는다
+    const val PRISMARINE_PICKAXE = 1.5f
+    const val PRISMARINE_SWORD = 0.75f
+    const val PRISMARINE_SWORD_WEAR = 2
 
     // 강령 소환사: 12블록 안, 30초 안에 죽은 좀비 계열 최대 2마리를 체력 절반으로
     const val NECRO_RADIUS = 12.0
@@ -190,8 +212,9 @@ object GimmickRules {
     const val SUCTION_EVERY = 3
     const val SUCTION_RADIUS = 3.0
 
-    // 중력 셜커: 공중부양 중 또 맞으면 공중부양을 끊고 아래로
-    const val GRAVITY_SLAM_VELOCITY = -1.2
+    // 가시 셜커(2026-11-22 개정, 중력 교란은 대처가 어려워 뺐다): 닫혀 있을 때 근접으로 치면 가시 피해 2 를 돌려받는다.
+    // 열려 있을 때 치거나 활·삼지창으로 치면 없다. 탄환은 바닐라 그대로(방패·쏘아 맞히기로 막는다)
+    const val SHELL_THORNS = 2.0f
 
     // 혼불 가스트: 울부짖음 소음 48, 죽을 때 작은 화염구 2~3개(Mobestiary: 위는 화염구로 가득)
     const val GHAST_CRY_RADIUS = 48
@@ -212,7 +235,10 @@ object GimmickRules {
 
     fun webSpitAllowed(distance: Double, visible: Boolean): Boolean = visible && distance in WEB_MIN_RANGE..WEB_MAX_RANGE
 
-    fun axeThrowAllowed(distance: Double, reachable: Boolean): Boolean = !reachable && distance in AXE_MIN_RANGE..AXE_MAX_RANGE
+    fun axeThrowAllowed(distance: Double, visible: Boolean): Boolean = visible && distance in AXE_MIN_RANGE..AXE_MAX_RANGE
+
+    /** 어려움 기준 최종 피해 → 몹 속성·피해에 넣을 값. */
+    fun beforeHardScale(finalDamage: Float): Float = finalDamage / HARD_SCALE
 
     fun blinkDistance(random: Random): Double = random.nextDouble(BLINK_MIN, BLINK_MAX)
 }

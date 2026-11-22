@@ -26,9 +26,11 @@ sys.path.insert(0, HERE)
 import build  # noqa: E402
 from zmodel import Model, cube_polys, jar_texture, load_models, axis_rot  # noqa: E402
 
-RIGS = {
-    'enderman': ['head', 'hat', 'body', 'right_arm', 'left_arm', 'right_leg', 'left_leg'],
-}
+# 리그(E) 몹: 뼈대는 모델에서 그대로(큐브 없는 뼈대도 계층용으로). 서버 정의는 data/zomapo/rig/<몹>.json
+RIG_MOBS = ['enderman', 'creeper', 'spider', 'cave_spider', 'slime', 'magma_cube', 'phantom', 'guardian', 'elder_guardian',
+            'ghast', 'blaze', 'breeze', 'creaking', 'ravager']
+EYES = {'enderman': ['head'], 'spider': ['head'], 'cave_spider': ['head'], 'phantom': ['head'], 'creaking': ['head'], 'breeze': ['head']}
+RIGS = {'enderman': ['head', 'hat', 'body', 'right_arm', 'left_arm', 'right_leg', 'left_leg']}
 VANILLA = {   # 행글라이더 탑승자(바닐라 몹 그대로, 매달린 자세는 서버가 뼈대를 돌린다)
     'zombie': ('minecraft:zombie#main', 'zombie/zombie.png'),
     'husk': ('minecraft:husk#main', 'zombie/husk.png'),
@@ -84,7 +86,7 @@ def cube_element(c, tw, th, tex_index, emission=0):
         (u1, v1), (u2, v2) = uvs[i1], uvs[i2]
         if abs(u1 - u2) < 1e-6 or abs(v1 - v2) < 1e-6:
             continue
-        faces[f] = {'uv': [round(u1, 4), round(v1, 4), round(u2, 4), round(v2, 4)], 'texture': f'#{tex_index}'}
+        faces[f] = {'uv': [round(u1, 4), round(v1, 4), round(u2, 4), round(v2, 4)], 'texture': f'#{tex_index}', 'tintindex': 0}
         allp.append(pts)
     if not faces:
         return None
@@ -141,11 +143,29 @@ def export(m, mob, bones, out, emission_for=lambda b, i, c: 0):
         part = m.root.find(b)
         els = export_bone(m, part, tex_ids, emission_for)
         write_json(os.path.join(root, 'models', 'rig', mob, b + '.json'), {'textures': textures, 'elements': els})
-        write_json(os.path.join(root, 'items', 'rig', mob, b + '.json'), {'model': {'type': 'minecraft:model', 'model': f'zomapo:rig/{mob}/{b}'}})
+        if els:
+            # 염색 틴트: 서버가 맞은 순간 dyed_color 를 붉게 바꿔 바닐라 피격 붉은 빛을 흉내 낸다
+            write_json(os.path.join(root, 'items', 'rig', mob, b + '.json'),
+                       {'model': {'type': 'minecraft:model', 'model': f'zomapo:rig/{mob}/{b}', 'tints': [{'type': 'minecraft:dye', 'default': -1}]}})
         parent = part.parent.name if part.parent is not None and part.parent.name != 'root' else None
-        meta[b] = {'pivot': [float(t) for t in part.offset], 'parent': parent, 'elements': len(els)}
+        meta[b] = {'pivot': [float(t) for t in part.offset], 'rest': [round(float(t), 5) for t in part.rot], 'parent': parent, 'elements': len(els)}
     write_json(os.path.join(out, 'rig-' + mob + '.json'), meta)
     return meta
+
+
+def bones_of(m):
+    """부모가 먼저 오는 순서의 모든 뼈대 이름(root 제외)."""
+    return [p.name for p in m.root.walk() if p.name != 'root']
+
+
+def server_def(mob, m, meta, data_dir):
+    """서버 리그 정의(뼈대 이름·부모·피벗·기본 회전·모델 유무·눈 레이어 덮기 배율). 바닐라 모델 배치 숫자만 담는다."""
+    bones = []
+    for b in bones_of(m):
+        v = meta[b]
+        bones.append({'name': b, 'parent': v['parent'], 'pivot': v['pivot'], 'rest': v['rest'], 'model': v['elements'] > 0,
+                      'scale': 1.06 if b in EYES.get(mob, []) else 1.0})
+    write_json(os.path.join(data_dir, mob + '.json'), {'id': mob, 'bones': bones})
 
 
 def _mk(*p):
@@ -176,22 +196,27 @@ def main():
     ap.add_argument('--jar', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--vanilla', action='store_true')
-    ap.add_argument('mobs', nargs='+')
+    ap.add_argument('--data', default=None, help='서버 리그 정의를 쓸 폴더(mod/src/main/resources/data/zomapo/rig)')
+    ap.add_argument('mobs', nargs='*')
     a = ap.parse_args()
     models = load_models(a.models)
-    for mob in a.mobs:
+    for mob in (a.mobs or (list(VANILLA) if a.vanilla else RIG_MOBS)):
         if a.vanilla:
             key, tex = VANILLA[mob]
             m = Model(mob, models[key], jar_texture(a.jar, tex))
             meta = export(m, mob, HUMANOID, a.out)
+            if a.data:
+                server_def(mob, m, meta, a.data)
         else:
-            m, d = build.make(models, a.jar, mob, True)
+            m, d = build.make(models, a.jar, mob, True, preview_pose=False)
             inner = {L['bone']: L.get('idx', 0) for L in d.get('layered', [])}
             glow_inner = d.get('emissive_inner', {})
 
             def em(bone, i, c, inner=inner, glow_inner=glow_inner):
                 return glow_inner.get(bone, 0) if inner.get(bone) == i else 0
-            meta = export(m, mob, RIGS[mob], a.out, em)
+            meta = export(m, mob, bones_of(m), a.out, em)
+            if a.data:
+                server_def(mob, m, meta, a.data)
         print(mob, {b: v['elements'] for b, v in meta.items()})
     core_model(a.out)
 
