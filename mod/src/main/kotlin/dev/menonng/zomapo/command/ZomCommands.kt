@@ -32,10 +32,22 @@ object ZomCommands {
                     .then(effect())
                     .then(give())
                     .then(motion())
+                    .then(infection())
                     .then(debug()),
             )
         }
     }
+
+    /** `/zomapo infection` — 전역 램프·야생 기준·국가 영토 레벨·지금 자리 레벨. */
+    private fun infection(): LiteralArgumentBuilder<CommandSourceStack> =
+        Commands.literal("infection").executes { ctx ->
+            val inf = dev.menonng.zomapo.infection.Infection
+            inf.recompute(ctx.source.server)
+            val here = inf.levelAt(ctx.source.level, ctx.source.position.x, ctx.source.position.z)
+            val nations = inf.nationLevels.entries.joinToString(", ") { "${it.key} ${"%.2f".format(it.value)}" }.ifEmpty { "국가 모드 없음" }
+            ctx.source.sendSuccess({ Component.literal("시즌 ${"%.1f".format(inf.seasonDays())}일째 · 전역 램프 ${"%.2f".format(inf.ramp)} · 야생 기준 ${"%.2f".format(inf.wild)} · 영토 $nations · 여기 ${"%.2f".format(here)}") }, false)
+            1
+        }
 
     private fun motion(): LiteralArgumentBuilder<CommandSourceStack> =
         Commands.literal("motion")

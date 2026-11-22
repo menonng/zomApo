@@ -21,6 +21,7 @@ dependencies {
     implementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
     implementation("net.fabricmc:fabric-language-kotlin:$flkVersion")
     implementation(project(":logic"))
+    compileOnly(project(":snw-api"))     // simpleNationWar 가 실행 시 제공
 }
 
 java {

@@ -27,6 +27,7 @@ internal object ZomSmoke {
     fun run(server: MinecraftServer): List<String> {
         val f = mutableListOf<String>()
         val level = server.overworld()
+        f += infectionChecks(server)
         val rm = server.recipeManager
         val water = PotionContents.createItemStack(Items.POTION, Potions.WATER)
         val awkward = PotionContents.createItemStack(Items.POTION, Potions.AWKWARD)
@@ -90,6 +91,47 @@ internal object ZomSmoke {
         if (fake.maxHealth != 20f) f += "해독 뒤 최대 체력이 돌아오지 않음: ${fake.maxHealth}"
         WoundsSystem.stopBleeding(fake)
         WoundHud.remove(fake)
+        return f
+    }
+
+    /** 감염 레벨: 스폰 레벨 기록·강화·좀비화·햇빛 면역·처치 점수. */
+    private fun infectionChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        val inf = dev.menonng.zomapo.infection.Infection
+        val sl = dev.menonng.zomapo.infection.SpawnLevels
+        inf.recompute(server)
+        val bridge = dev.menonng.zomapo.infection.NationBridge
+        if (bridge.present && bridge.nations().size != 3) f += "국가 모드 연동: 국가 수가 3 이 아님(${bridge.nations().size})"
+        if (bridge.present && inf.nationLevels.size != 3) f += "국가 영토 레벨이 계산되지 않음"
+        val lv = inf.levelAt(level, 5000.0, 5000.0)
+        if (lv < 0 || lv > 5) f += "감염 레벨 범위 밖: $lv"
+        val pos = net.minecraft.core.BlockPos(5000, 100, 5000)
+        level.getChunk(pos)
+        fun make(type: net.minecraft.world.entity.EntityType<out net.minecraft.world.entity.Mob>): net.minecraft.world.entity.Mob {
+            val m = type.create(level, net.minecraft.world.entity.EntitySpawnReason.NATURAL)!!
+            m.snapTo(5000.5, 100.0, 5000.5, 0f, 0f)
+            m.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), net.minecraft.world.entity.EntitySpawnReason.NATURAL, null)
+            return m
+        }
+        val z = make(net.minecraft.world.entity.EntityTypes.ZOMBIE)
+        if (sl.spawnLevel(z) == null) f += "좀비에 스폰 레벨이 굳지 않음"
+        sl.eventOverride = 4 to dev.menonng.zomapo.logic.score.SpawnSource.BLOODMOON
+        val z4 = make(net.minecraft.world.entity.EntityTypes.ZOMBIE)
+        val sk = make(net.minecraft.world.entity.EntityTypes.SKELETON)
+        sl.eventOverride = null
+        if (sl.spawnLevel(z4) != 4) f += "이벤트 레벨이 좀비에 굳지 않음"
+        if (z4.maxHealth < 29f) f += "Lv4 체력 ×1.5 가 아님: ${z4.maxHealth}"
+        if (!sl.immuneToSun(z4)) f += "Lv4 출신이 햇빛에 탐"
+        if (!dev.menonng.zomapo.gimmick.Zombified.isZombified(sk)) f += "Lv4 이벤트 스켈레톤이 좀비화되지 않음"
+        val sk0 = make(net.minecraft.world.entity.EntityTypes.SKELETON)
+        if (sl.spawnLevel(z)!! < 1 && dev.menonng.zomapo.gimmick.Zombified.isZombified(sk0)) f += "Lv0 스켈레톤이 좀비화됨"
+        level.addFreshEntity(z4)
+        val killer = net.fabricmc.fabric.api.entity.FakePlayer.get(level)
+        val before = inf.score(killer.uuid)
+        z4.hurtServer(level, level.damageSources().playerAttack(killer), 1000f)
+        if (inf.score(killer.uuid) <= before) f += "좀비 처치 점수가 오르지 않음"
+        z4.discard()
         return f
     }
 }

@@ -18,11 +18,17 @@ object ZomConfig {
     var motionIntensity: Double = MotionRules.DEFAULT_INTENSITY
         private set
 
+    /** 시즌 시작일(현실, KST). 감염 전역 램프 G 의 0일째. */
+    @Volatile
+    var seasonStart: java.time.LocalDate = java.time.LocalDate.of(2027, 1, 16)
+        private set
+
     fun load() {
         val p = Properties()
         runCatching { if (Files.exists(path)) Files.newBufferedReader(path).use { p.load(it) } }
             .onFailure { ZomApo.log.warn("[zomApo] 설정을 읽지 못했습니다: {}", it.message) }
         motionIntensity = MotionRules.clampIntensity(p.getProperty("rig.motion_intensity")?.toDoubleOrNull() ?: MotionRules.DEFAULT_INTENSITY)
+        seasonStart = p.getProperty("season.start")?.let { runCatching { java.time.LocalDate.parse(it.trim()) }.getOrNull() } ?: seasonStart
     }
 
     fun setMotionIntensity(v: Double) {
