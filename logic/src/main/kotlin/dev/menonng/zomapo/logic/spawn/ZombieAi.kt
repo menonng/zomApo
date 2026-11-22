@@ -1,6 +1,8 @@
 package dev.menonng.zomapo.logic.spawn
 
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sign
 
 /**
  * 레벨별 좀비 지능. docs/design/zombies.md '몹 좀비화' 2-1 (2026-11-22).
@@ -21,6 +23,7 @@ data class ZombieAiProfile(
     val undermineWeakBlocks: Boolean,// Lv4: 기둥 밑 블록을 부숴 끌어내리기
     val usesDroppedGear: Boolean,    // Lv4: 무기·방어구 줍기
     val retreatsWhenLow: Boolean,    // Lv4: 빈사 후퇴
+    val tunnelMaxLength: Int,        // Lv4: 땅굴 최대 칸(0 = 안 팜). 굴착꾼은 [diggerProfile]
     val sprintBursts: Boolean,       // Lv5: 짧은 질주
     val surrounds: Boolean,          // Lv5: 포위
     val breaksTorches: Boolean,      // Lv5: 횃불 끄기
@@ -44,6 +47,18 @@ object ZombieAi {
     const val GATHER_REACH = 2.0               // 쌓을 블록이 모자라면 2블록 안에서 캐 온다
     const val FORBIDDEN_NEAR_CORE = 3
     val UNDERMINE_HEIGHT = 1..2
+
+    /** 땅굴(2026-11-22): 폭 1 × 높이 2, 한 칸에 높이 최대 1. 대상이 24블록 안이고 길 찾기가 실패했을 때만. */
+    const val TUNNEL_TRIGGER_RANGE = 24.0
+    const val TUNNEL_LENGTH = 16
+    const val TUNNEL_DETOURS = 3
+    const val TUNNEL_MAX_DIGGERS_PER_TARGET = 3
+    /** 굴착꾼: 돌까지(단단함 3.0, #zomapo:dig_proof 제외), 32칸, 돌 곡괭이 플레이어의 2배 시간. */
+    const val DIGGER_MAX_HARDNESS = 3.0f
+    const val DIGGER_TUNNEL_LENGTH = 32
+    const val DIGGER_MIN_LEVEL = 3
+    private const val STONE_PICKAXE_SPEED = 4.0
+    const val DIGGER_TIME_FACTOR = 2.0
 
     const val AMBUSH_SEARCH_RADIUS = 16.0
     const val AMBUSH_MAX_TICKS = 60 * 20
@@ -82,6 +97,7 @@ object ZombieAi {
             undermineWeakBlocks = l >= 4,
             usesDroppedGear = l >= 4,
             retreatsWhenLow = l >= 4,
+            tunnelMaxLength = if (l >= 4) TUNNEL_LENGTH else 0,
             sprintBursts = l >= 5,
             surrounds = l >= 5,
             breaksTorches = l >= 5,
@@ -94,6 +110,51 @@ object ZombieAi {
      */
     fun canBreak(profile: ZombieAiProfile, hardness: Float, dropsByHand: Boolean, excluded: Boolean = false): Boolean =
         !excluded && dropsByHand && hardness >= 0f && hardness <= profile.breakMaxHardness
+
+    /** 굴착꾼 변종: 레벨 행동 위에 돌까지 파는 땅굴(Lv3 부터 해금이라 그 아래로 내려가지 않는다). */
+    fun diggerProfile(spawnLevel: Int): ZombieAiProfile {
+        val base = profile(maxOf(DIGGER_MIN_LEVEL, spawnLevel))
+        return base.copy(breakMaxHardness = DIGGER_MAX_HARDNESS, tunnelMaxLength = DIGGER_TUNNEL_LENGTH, carryMax = maxOf(base.carryMax, CARRY_LV4))
+    }
+
+    /** 굴착꾼이 [dropsByHand] 와 상관없이 팔 수 있는지(곡괭이를 들었다). [digProof] = #zomapo:dig_proof. */
+    fun diggerCanBreak(hardness: Float, digProof: Boolean, excluded: Boolean = false): Boolean =
+        !digProof && !excluded && hardness >= 0f && hardness <= DIGGER_MAX_HARDNESS
+
+    /** 굴착꾼 한 블록 시간 = 돌 곡괭이 플레이어(단단함 × 1.5 ÷ 4 초) × 2. 돌 1.5 → 22틱, 심층암 3.0 → 45틱. */
+    fun diggerBreakTicks(hardness: Float): Int = (hardness * 1.5 / STONE_PICKAXE_SPEED * 20 * DIGGER_TIME_FACTOR).toInt().coerceAtLeast(5)
+
+    data class Cell(val x: Int, val y: Int, val z: Int) { fun up(n: Int = 1) = Cell(x, y + n, z) }
+
+    /** 땅굴 한 칸: 발 위치 [feet] 로 옮기려면 비워야 하는 칸들. */
+    data class TunnelStep(val feet: Cell, val clear: List<Cell>)
+
+    /**
+     * [from](좀비 발) 에서 [to](대상 발) 쪽으로 폭 1 × 높이 2 계단식 굴. 수평으로 한 칸씩(xz 격자 직선), 높이는 한 칸에 최대 ±1.
+     * 위로 오를 때는 지금 칸 머리 위 한 칸도 비운다(머리가 걸리지 않게), 내려갈 때는 새 칸 머리 위 한 칸도 비운다.
+     * 수평 거리가 0 이면(바로 위·아래) 파지 않는다: 수직 굴은 만들지 않는다. 최대 [maxLength] 칸.
+     */
+    fun tunnelPath(from: Cell, to: Cell, maxLength: Int): List<TunnelStep> {
+        val dx = to.x - from.x; val dz = to.z - from.z
+        val n = maxOf(abs(dx), abs(dz))
+        if (n == 0 || maxLength <= 0) return emptyList()
+        val steps = ArrayList<TunnelStep>()
+        var cur = from
+        for (i in 1..minOf(n, maxLength)) {
+            val x = from.x + Math.round(dx.toDouble() * i / n).toInt()
+            val z = from.z + Math.round(dz.toDouble() * i / n).toInt()
+            val dy = (to.y - cur.y).sign
+            val next = Cell(x, cur.y + dy, z)
+            val clear = when {
+                dy > 0 -> listOf(cur.up(2), next, next.up())
+                dy < 0 -> listOf(next, next.up(), next.up(2))
+                else -> listOf(next, next.up())
+            }
+            steps += TunnelStep(next, clear)
+            cur = next
+        }
+        return steps
+    }
 
     /** 기둥 밑 블록을 부숴 끌어내릴지: 부술 수 있는 블록이고 대상이 좀비보다 1~2칸 위(Lv4). */
     fun canUndermine(profile: ZombieAiProfile, hardness: Float, dropsByHand: Boolean, targetAbove: Int): Boolean =

@@ -57,4 +57,34 @@ class ZombieAiTest {
         assertEquals(1.0, ZombieAi.surroundAngle(1, 2, 1.0), 1e-9)
         assertEquals(1.0 + PI, ZombieAi.surroundAngle(2, 4, 1.0), 1e-9)
     }
+
+    @Test
+    @DisplayName("땅굴: 일반 좀비 Lv4 흙·나무 16칸, 굴착꾼 돌까지 32칸, 계단식 1x2")
+    fun case03() {
+        assertEquals(0, ZombieAi.profile(3).tunnelMaxLength)
+        assertEquals(16, ZombieAi.profile(4).tunnelMaxLength)
+        val d = ZombieAi.diggerProfile(3)
+        assertEquals(32, d.tunnelMaxLength); assertEquals(3.0f, d.breakMaxHardness)
+        assertEquals(32, ZombieAi.diggerProfile(0).tunnelMaxLength)          // 굴착꾼은 Lv3 아래로 내려가지 않음
+        assertTrue(ZombieAi.diggerCanBreak(1.5f, digProof = false))           // 돌
+        assertTrue(ZombieAi.diggerCanBreak(3.0f, digProof = false))           // 심층암
+        assertFalse(ZombieAi.diggerCanBreak(50f, digProof = true))            // 흑요석
+        assertFalse(ZombieAi.diggerCanBreak(2.0f, digProof = true))           // 철문 등 목록
+        assertFalse(ZombieAi.canBreak(ZombieAi.profile(5), 1.5f, dropsByHand = false))   // 일반 좀비는 돌 못 팜
+        assertEquals(22, ZombieAi.diggerBreakTicks(1.5f)); assertEquals(45, ZombieAi.diggerBreakTicks(3.0f))
+
+        val c = { x: Int, y: Int, z: Int -> ZombieAi.Cell(x, y, z) }
+        // 수평 3칸, 2칸 아래: 계단 두 번 뒤 평지
+        val path = ZombieAi.tunnelPath(c(0, 64, 0), c(3, 62, 0), 16)
+        assertEquals(listOf(c(1, 63, 0), c(2, 62, 0), c(3, 62, 0)), path.map { it.feet })
+        assertEquals(listOf(c(1, 63, 0), c(1, 64, 0), c(1, 65, 0)), path[0].clear)
+        assertEquals(listOf(c(3, 62, 0), c(3, 63, 0)), path[2].clear)
+        // 오르막은 지금 칸 머리 위도 비운다
+        val up = ZombieAi.tunnelPath(c(0, 10, 0), c(2, 12, 1), 16)
+        assertEquals(listOf(c(0, 12, 0), c(1, 11, 1), c(1, 12, 1)), up[0].clear)
+        assertEquals(c(2, 12, 1), up.last().feet)
+        // 길이 제한, 수직 굴 없음
+        assertEquals(16, ZombieAi.tunnelPath(c(0, 0, 0), c(40, 0, 0), 16).size)
+        assertTrue(ZombieAi.tunnelPath(c(0, 0, 0), c(0, -10, 0), 16).isEmpty())
+    }
 }
