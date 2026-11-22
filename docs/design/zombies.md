@@ -457,6 +457,8 @@ zomApo 상태 효과 줄(흰색, 글자만)은 이 보스바들 아래에 쌓인
 
 ### 9. 구현 메모
 
+- **2026-11-22 구현 현황**: 감염 레벨 `infection/Infection.kt`·`SpawnLevels.kt`(믹스인 `MobSpawnLevelMixin`), 좀비 떼 `gimmick/HordeSystem.kt`, 디스폰 기억 `gimmick/Memory.kt`(`MobMemoryMixin`), 소음 `gimmick/VibrationNoise.kt`(`GameEventNoiseMixin`), 블러드문 `gimmick/BloodMoonSystem.kt`, 변종 `gimmick/VariantSystem.kt`, 좀비 지능 `ai/ZombieBrain.kt`. simpleNationWar 연동은 `infection/NationBridge.kt`(snw-api 컴파일 전용 사본). 운영 명령 `/zomapo infection`·`horde`·`bloodmoon [start|stop]`. 아직: 부하 연동 상한(2-1) 자동 조절, 감염 둥지(5절), 보름달 밤, 기억 좀비 구역 상한, 변종 머리 모델.
+
 - 청크마다 값을 저장하지 않는다. 영역 레벨은 `(전역 램프, 국가별 H·정화, 서버 전체 열기, 영토 판정, 희소한 이벤트 보정 목록)` 으로 즉석 계산하고, 국가별 '영토까지의 거리' 표(반경 40청크)는 영토가 바뀔 때만 BFS 로 다시 만든다. 탐험 보너스는 몹이 태어날 때 반경 128 안 플레이어 몇 명만 본다.
 - 저장: `SavedData` 하나(`zomapo_infection`). 전역 램프 보정, 국가별 일일 스냅샷(S7·N7·H·정화·레벨 이력), 이벤트 보정 목록(종류, 범위, 값, 만료), 둥지 목록.
 - 갱신: 매일 06:00 에 국가별 H 를 다시 계산하고, 이벤트 보정은 발생 즉시 반영한다.
