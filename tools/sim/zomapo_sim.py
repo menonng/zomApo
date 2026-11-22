@@ -32,7 +32,8 @@ CALIB_TARGET = 3.0
 Z_MAX = 5.0
 TERRITORY_SHARE = 0.6                        # 접속 시간 중 자국 영토·접경에 머무는 비율
 FUN_NEUTRAL = 4.6                            # 이보다 재미있으면 다음 접속 의욕이 오르고, 낮으면 내려간다
-WINDOW = 3                                   # 하이브리드 방식의 국가 열기·정화 창(현실 일)
+WINDOW = 3                                   # 정화(함께 있던 시간) 창(현실 일)
+HEAT_WINDOW = 7                              # 국가 열기 창(현실 일). 2026-11-22: 72시간 → 최근 7일
 GAME_DAYS_PER_HOUR = 3.0                     # 게임 하루 = 현실 20분
 MOON_CYCLE = 8                               # 보름달 주기(게임 일)
 CURE_STAGES = 3
@@ -202,15 +203,15 @@ def nation_levels(cfg: Config, players: list[Player], d: int):
             sd = statistics.pstdev(cum)
             raw = statistics.fmean(min(c, mu + sd) for c in cum)
         else:
-            actives = sum(1 for p in mem if p.recent(p.day_hours, d, WINDOW) >= 1)
+            actives = sum(1 for p in mem if p.recent(p.day_hours, d, HEAT_WINDOW) >= 1)
             if cfg.method == "S":
-                recent = sum(p.recent(p.day_score, d, WINDOW) for p in mem)
+                recent = sum(p.recent(p.day_score, d, HEAT_WINDOW) for p in mem)
                 heat = math.log1p(recent / max(1, actives) / SCORE_DIVISOR)
             elif cfg.method == "T":
-                recent = sum(p.recent(p.day_base, d, WINDOW) for p in mem)
+                recent = sum(p.recent(p.day_base, d, HEAT_WINDOW) for p in mem)
                 heat = math.log1p(recent / max(1, actives) / SCORE_DIVISOR)
             else:
-                recent = sum(p.recent(p.day_kills, d, WINDOW) for p in mem)
+                recent = sum(p.recent(p.day_kills, d, HEAT_WINDOW) for p in mem)
                 heat = math.log1p(recent / max(1, actives) / 40.0)
             group_h = sum(p.recent(p.day_group, d, WINDOW) for p in mem)
             purify = min(1.0, 0.18 * math.sqrt(group_h))

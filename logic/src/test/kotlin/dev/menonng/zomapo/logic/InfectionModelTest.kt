@@ -31,11 +31,11 @@ class InfectionModelTest {
     }
 
     @Test
-    @DisplayName("국가 열기 예시 - 활동 국민 2명이 72시간에 기본 좀비 스코어 256")
+    @DisplayName("국가 열기 예시 - 활동 국민 2명이 최근 7일에 기본 좀비 스코어 256")
     fun case03() {
         val h = model.heat(NationActivity(baseScore = 256.0, activeMembers = 2, groupHours = 0.0))
         assertEquals(ln(3.0), h, 1e-9)
-        assertEquals(1.92, model.config.heatK * h, 0.01)
+        assertEquals(1.76, model.config.heatK * h, 0.01)
     }
 
     @Test

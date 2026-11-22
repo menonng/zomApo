@@ -14,7 +14,7 @@ data class InfectionConfig(
     val maxLevel: Double = 5.0,
     val rampAmplitude: Double = 2.0,
     val rampTauDays: Double = 10.0,
-    val heatK: Double = 1.75,          // 20명/활성 10명에서 1/29 평균 영토 레벨 3.0 (tools/sim/heat-compare.md)
+    val heatK: Double = 1.6,           // 최근 7일 창(2026-11-22). 20명/활성 10명에서 1/29 평균 3.75, 2/7 4.90 (tools/sim/heat-compare.md)
     val heatDivisor: Double = 64.0,    // 처치 수 40 × 처치당 평균 기본 점수 약 1.6
     val purifyCoefficient: Double = 0.18,
     val purifyCap: Double = 1.0,
@@ -26,9 +26,9 @@ data class InfectionConfig(
 )
 
 /**
- * 한 국가의 최근 72시간 활동.
- * [baseScore] = 국민 전원이 72시간 동안 얻은 기본 좀비 스코어 합(농장 감쇠 적용, 레벨 배율 제외: ZombieScore.forHeat).
- * [activeMembers] = 72시간 동안 **잠수를 뺀 활동 시간**이 1시간 이상인 국민 수(snw-api 의 잠수 판정. 접속만 해 둔 사람으로 나눗셈을 키울 수 없다).
+ * 한 국가의 최근 7일 활동.
+ * [baseScore] = 국민 전원이 최근 7일 동안 얻은 기본 좀비 스코어 합(농장 감쇠 적용, 레벨 배율 제외: ZombieScore.forHeat).
+ * [activeMembers] = 최근 7일 동안 **잠수를 뺀 활동 시간**이 1시간 이상인 국민 수(snw-api 의 잠수 판정. 접속만 해 둔 사람으로 나눗셈을 키울 수 없다).
  */
 data class NationActivity(
     val baseScore: Double,
@@ -48,7 +48,7 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
         return max(0.0, raw - permanentReduction - temporaryReduction)
     }
 
-    /** 국가 열기 H = ln(1 + S3 / max(1, N3) / divisor). S3 = 72시간 국가 기본 좀비 스코어, N3 = 활동 국민 수. */
+    /** 국가 열기 H = ln(1 + S7 / max(1, N7) / divisor). S7 = 최근 7일 국가 기본 좀비 스코어, N7 = 활동 국민 수. */
     fun heat(activity: NationActivity): Double {
         val perActive = activity.baseScore / max(1, activity.activeMembers)
         return ln(1.0 + max(0.0, perActive) / config.heatDivisor)
