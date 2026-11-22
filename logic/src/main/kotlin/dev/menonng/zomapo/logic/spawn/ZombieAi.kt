@@ -15,8 +15,10 @@ data class ZombieAiProfile(
     val alertRadius: Double,         // Lv3: 처음 본 좀비가 이 반경의 쉬는 좀비에게 알림(0 = 없음)
     val repathTicks: Int,            // 길 다시 찾기 주기
     val maxBuildBlocks: Int,         // 다리·기둥 최대 칸(0 = 안 쌓음)
+    val breakMaxHardness: Float,     // 부술 수 있는 블록의 최대 단단함(맨손으로 캐도 나오는 블록만, 음수 = 안 부숨)
+    val carryMax: Int,               // 부숴서 들고 다니는 블록 최대 개수
     val ambushIndoors: Boolean,      // Lv3: 숨은 대상을 문·창가 옆에서 기다림
-    val undermineWeakBlocks: Boolean,// Lv4: 기둥 밑 약한 블록 부수기
+    val undermineWeakBlocks: Boolean,// Lv4: 기둥 밑 블록을 부숴 끌어내리기
     val usesDroppedGear: Boolean,    // Lv4: 무기·방어구 줍기
     val retreatsWhenLow: Boolean,    // Lv4: 빈사 후퇴
     val sprintBursts: Boolean,       // Lv5: 짧은 질주
@@ -29,15 +31,18 @@ object ZombieAi {
     const val VANILLA_REPATH_TICKS = 20
     const val FAST_REPATH_TICKS = 10
 
-    /** 좀비가 놓는 블록: 거친 흙, 2분 뒤 사라짐, 드랍 없음. */
-    const val BUILD_BLOCK_LIFETIME_TICKS = 2 * 60 * 20
+    /**
+     * 블록 부수기·쌓기(2026-11-22 개정): 맨손으로 캐도 그 블록이 나오는 것만 부수고(돌·유리·블록 엔티티·작물·레드스톤·문 제외),
+     * 부순 블록은 좀비 인벤토리에 넣었다가 꺼내 쌓는다. 쌓은 블록은 진짜 블록, 죽으면 가진 블록을 모두 떨어뜨린다.
+     */
+    const val WEAK_BLOCK_MAX_HARDNESS = 0.8f   // Lv3: 흙·모래·자갈·잎·양털·네더랙
+    const val WOOD_BLOCK_MAX_HARDNESS = 2.0f   // Lv4+: 나무판·원목·나무 울타리까지
+    const val CARRY_LV3 = 8
+    const val CARRY_LV4 = 16
+    const val BREAK_TIME_FACTOR = 3.0          // 맨손 플레이어의 3배
     const val BUILD_INTERVAL_TICKS = 15
-    const val BUILD_MAX_OUTSTANDING = 6
-    const val BUILD_FORBIDDEN_NEAR_CORE = 3
-
-    /** 약한 블록 = 단단함 0.8 이하, 맨손 플레이어의 3배 시간. 대상이 1~2칸 위일 때만. */
-    const val WEAK_BLOCK_MAX_HARDNESS = 0.8f
-    const val UNDERMINE_TIME_FACTOR = 3.0
+    const val GATHER_REACH = 2.0               // 쌓을 블록이 모자라면 2블록 안에서 캐 온다
+    const val FORBIDDEN_NEAR_CORE = 3
     val UNDERMINE_HEIGHT = 1..2
 
     const val AMBUSH_SEARCH_RADIUS = 16.0
@@ -71,6 +76,8 @@ object ZombieAi {
             alertRadius = if (l >= 3) ALERT_RADIUS else 0.0,
             repathTicks = if (l >= 3) FAST_REPATH_TICKS else VANILLA_REPATH_TICKS,
             maxBuildBlocks = when { l >= 4 -> 3; l >= 3 -> 1; else -> 0 },
+            breakMaxHardness = when { l >= 4 -> WOOD_BLOCK_MAX_HARDNESS; l >= 3 -> WEAK_BLOCK_MAX_HARDNESS; else -> -1f },
+            carryMax = when { l >= 4 -> CARRY_LV4; l >= 3 -> CARRY_LV3; else -> 0 },
             ambushIndoors = l >= 3,
             undermineWeakBlocks = l >= 4,
             usesDroppedGear = l >= 4,
@@ -81,16 +88,30 @@ object ZombieAi {
         )
     }
 
-    /** 기둥 밑 약한 블록을 부술지: 단단함 0.8 이하이고 대상이 좀비보다 1~2칸 위. 음수 단단함(부술 수 없음)은 제외. */
-    fun canUndermine(profile: ZombieAiProfile, hardness: Float, targetAbove: Int): Boolean =
-        profile.undermineWeakBlocks && hardness in 0f..WEAK_BLOCK_MAX_HARDNESS && targetAbove in UNDERMINE_HEIGHT
+    /**
+     * 이 좀비가 이 블록을 부술 수 있는지. [dropsByHand] = 도구 없이 캐도 그 블록이 나온다(26.3 `!requiresCorrectToolForDrops` 이고
+     * 드랍이 있음), [excluded] = 블록 엔티티·작물·레드스톤·문 등 제외 목록이거나 캠프·코어 주변. 음수 단단함(기반암)은 못 부순다.
+     */
+    fun canBreak(profile: ZombieAiProfile, hardness: Float, dropsByHand: Boolean, excluded: Boolean = false): Boolean =
+        !excluded && dropsByHand && hardness >= 0f && hardness <= profile.breakMaxHardness
 
-    /** 약한 블록을 부수는 데 걸리는 틱(맨손 플레이어 시간 × 3). 맨손 플레이어 = 단단함 × 1.5초(흙·모래처럼 도구 없이 캐는 블록 기준). 흙 0.5 → 45틱. */
-    fun undermineTicks(hardness: Float): Int = (hardness * 1.5 * 20 * UNDERMINE_TIME_FACTOR).toInt().coerceAtLeast(10)
+    /** 기둥 밑 블록을 부숴 끌어내릴지: 부술 수 있는 블록이고 대상이 좀비보다 1~2칸 위(Lv4). */
+    fun canUndermine(profile: ZombieAiProfile, hardness: Float, dropsByHand: Boolean, targetAbove: Int): Boolean =
+        profile.undermineWeakBlocks && targetAbove in UNDERMINE_HEIGHT && canBreak(profile, hardness, dropsByHand)
 
-    /** 1칸 틈 다리·높이 기둥에 필요한 칸 수가 이 좀비의 한도 안인지. */
-    fun canBuild(profile: ZombieAiProfile, blocksNeeded: Int, outstanding: Int): Boolean =
-        blocksNeeded in 1..profile.maxBuildBlocks && outstanding + blocksNeeded <= BUILD_MAX_OUTSTANDING
+    /** 부수는 데 걸리는 틱 = 맨손 플레이어 시간(도구 없이 캐지는 블록은 단단함 × 1.5초) × 3. 흙 0.5 → 45틱, 나무판 2.0 → 180틱. */
+    fun breakTicks(hardness: Float): Int = (hardness * 1.5 * 20 * BREAK_TIME_FACTOR).toInt().coerceAtLeast(10)
+
+    /** 부순 블록을 인벤토리에 넣을 수 있는 개수(넘치는 것은 떨어진다). */
+    fun pickUp(profile: ZombieAiProfile, carried: Int, broken: Int = 1): Int = (profile.carryMax - carried).coerceIn(0, broken)
+
+    /** 다리·기둥에 [blocksNeeded] 칸이 필요할 때: 한도 안이고 들고 있는 블록이 충분하면 바로 쌓는다. */
+    fun canBuild(profile: ZombieAiProfile, blocksNeeded: Int, carried: Int): Boolean =
+        blocksNeeded in 1..profile.maxBuildBlocks && carried >= blocksNeeded
+
+    /** 쌓아야 하는데 블록이 모자라서 주변에서 먼저 캐 와야 하는 개수(한도를 넘는 쌓기면 0 = 시도하지 않음). */
+    fun blocksToGather(profile: ZombieAiProfile, blocksNeeded: Int, carried: Int): Int =
+        if (blocksNeeded !in 1..profile.maxBuildBlocks) 0 else (blocksNeeded - carried).coerceAtLeast(0)
 
     fun shouldRetreat(profile: ZombieAiProfile, health: Double, maxHealth: Double): Boolean =
         profile.retreatsWhenLow && maxHealth > 0 && health / maxHealth < RETREAT_HEALTH_FRACTION
