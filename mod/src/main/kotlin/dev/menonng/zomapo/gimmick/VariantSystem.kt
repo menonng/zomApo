@@ -112,6 +112,7 @@ object VariantSystem {
                 z.snapTo(p.x + 0.5, p.y.toDouble(), p.z + 0.5, 0f, 0f)
                 z.finalizeSpawn(level, level.getCurrentDifficultyAt(p), EntitySpawnReason.REINFORCEMENT, null)
                 z.target = t
+                Memory.acquire(z, dev.menonng.zomapo.logic.despawn.MemoryReason.SCREAMER_CALL)
                 level.addFreshEntity(z)
             }
         } finally { SpawnLevels.eventOverride = null }

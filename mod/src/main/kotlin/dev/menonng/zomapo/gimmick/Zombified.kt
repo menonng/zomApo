@@ -62,6 +62,7 @@ object Zombified {
         IllagerPatrol.register()
         AlphaSystem.register()
         VariantSystem.register()
+        HordeSystem.register()
         ServerTickEvents.END_LEVEL_TICK.register { level -> tick(level) }
         // 시체 운반자가 내려놓은 승객은 낙하 피해를 받지 않는다
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, source, _ ->

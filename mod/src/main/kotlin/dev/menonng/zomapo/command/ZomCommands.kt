@@ -33,6 +33,13 @@ object ZomCommands {
                     .then(give())
                     .then(motion())
                     .then(infection())
+                    .then(Commands.literal("horde").executes { ctx ->
+                        val p = ctx.source.playerOrException
+                        val lv = dev.menonng.zomapo.infection.Infection.displayLevel(p.level(), p.x, p.z)
+                        val r = dev.menonng.zomapo.logic.spawn.Horde.sizeRange(lv)
+                        dev.menonng.zomapo.gimmick.HordeSystem.start(p.level(), p.uuid, lv, r.first)
+                        ctx.source.sendSuccess({ Component.literal("좀비 떼를 불렀습니다(Lv$lv, ${r.first}마리, 5초 뒤 두 무리).") }, false); 1
+                    })
                     .then(debug()),
             )
         }

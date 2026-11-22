@@ -112,6 +112,10 @@ object ZombieBrain {
         for (m in mobs) {
             val prof = profileOf(m) ?: continue
             val s = states.getOrPut(m) { St() }
+            if ((tick + m.id) % 20 == 0L) {
+                if (m.target is Player) dev.menonng.zomapo.gimmick.Memory.acquire(m, dev.menonng.zomapo.logic.despawn.MemoryReason.TARGETED_PLAYER)
+                else if (level.getNearestPlayer(m, 32.0) != null) dev.menonng.zomapo.gimmick.Memory.touch(m)
+            }
             perTick(level, m, prof, s, now)
             if ((tick + m.id) % 10 != 0L) continue
             think(level, m, prof, s, now, chasers[m.target?.uuid] ?: emptyList())

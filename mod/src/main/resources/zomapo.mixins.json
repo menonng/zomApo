@@ -17,6 +17,7 @@
     "ItemDisplayInvoker",
     "MeleeCooldownMixin",
     "MobAccessor",
+    "MobMemoryMixin",
     "MobSpawnLevelMixin",
     "PhantomAccessor",
     "PhantomRiderMixin",

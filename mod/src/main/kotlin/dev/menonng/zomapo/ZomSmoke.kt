@@ -183,6 +183,10 @@ internal object ZomSmoke {
         val runner = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
         vs.apply(runner, dev.menonng.zomapo.logic.spawn.Variant.RUNNER)
         if (runner.maxHealth != 14f) f += "러너 체력이 14 가 아님: ${runner.maxHealth}"
+        // 기억: 플레이어를 노린 좀비는 사라지지 않는다
+        if (!dev.menonng.zomapo.gimmick.Memory.mayDespawn(runner)) f += "기억 없는 좀비가 디스폰 안 됨"
+        dev.menonng.zomapo.gimmick.Memory.acquire(runner, dev.menonng.zomapo.logic.despawn.MemoryReason.HORDE)
+        if (dev.menonng.zomapo.gimmick.Memory.mayDespawn(runner)) f += "기억 있는 좀비가 디스폰될 수 있음"
         if (dev.menonng.zomapo.ai.ZombieBrain.profileOf(runner) != null) {} // 스폰 레벨 없으면 지능 없음
         return f
     }
