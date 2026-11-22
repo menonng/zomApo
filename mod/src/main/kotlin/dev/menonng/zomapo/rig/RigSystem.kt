@@ -1,5 +1,6 @@
 package dev.menonng.zomapo.rig
 
+import dev.menonng.zomapo.gimmick.ShulkerParasite
 import dev.menonng.zomapo.gimmick.VoidDescent
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.util.Mth
@@ -69,16 +70,18 @@ object RigSystem {
         val p = s.pose
         p.reset()
         val age = m.tickCount.toFloat()
+        // ShulkerRenderer 는 몸 방향에 180 을 더해 넘긴다. 셜커의 몸 방향은 클라이언트에서 늘 0 이다
+        // (생성 패킷에서 0 으로 두고 몸 회전 제어가 아무것도 하지 않는다) → 서버 값이 아니라 0 + 180
+        val yaw = if (m is Shulker) 180f else m.yBodyRot
         animate(m, p, age)
-        if (m.deathTime > 0) {
-            // LivingEntityRenderer: 몸 방향 다음, 몹별 추가 회전(팬텀 기울기·셜커 붙은 면)보다 먼저 쓰러진다
+        Motion.apply(m, p, age, yaw)          // 움직임 연출(비틀거림·공격 예고·맞을 때·냄새 맡기)
+        if (m.deathTime > 0 && !Motion.death(m, p)) {
+            // 바닐라 쓰러짐(연출 강도 0): 몸 방향 다음, 몹별 추가 회전(팬텀 기울기·셜커 붙은 면)보다 먼저 옆으로
             val f = min(1f, sqrt(max(0f, (m.deathTime - 1f) / 20f * 1.6f)))
             p.root.premul(Quaternionf().rotationZ(Math.toRadians(f * 90.0).toFloat()))
         }
         s.rig.tint(m.hurtTime > 0 || m.deathTime > 0)
-        // ShulkerRenderer 는 몸 방향에 180 을 더해 넘긴다. 셜커의 몸 방향은 클라이언트에서 늘 0 이다
-        // (생성 패킷에서 0 으로 두고 몸 회전 제어가 아무것도 하지 않는다) → 서버 값이 아니라 0 + 180
-        s.rig.apply(m.position(), if (m is Shulker) 180f else m.yBodyRot, p)
+        s.rig.apply(m.position(), yaw, p)
     }
 
     // ------------------------------------------------------------------ 몹별 동작(바닐라 식)
@@ -186,7 +189,9 @@ object RigSystem {
      * 루트 회전 R, 띄움 = R⁻¹c - c (c = (0, 0.5, 0)) 이면 Q · R · (v + 띄움) = Q · (R v + c - R c).
      */
     private fun shulker(sh: Shulker, p: Pose, age: Float) {
-        val peek = sh.getClientPeekAmount(1f)
+        val whip = ShulkerParasite.whip(sh)
+        // 줄 채찍: 바닐라 열림(0.05/틱)보다 빨리 확 열린다
+        val peek = maxOf(sh.getClientPeekAmount(1f), whip?.let { min(1f, it.first * 4f) } ?: 0f)
         val f = (0.5f + peek) * FLAT
         val f1 = -1f + sin(f)
         val bob = if (f > FLAT) sin(age * 0.1f) * 0.7f else 0f
@@ -199,6 +204,21 @@ object RigSystem {
         p.root.set(face)
         val c = Vector3f(0f, 0.5f, 0f)
         p.lift.set(Quaternionf(face).conjugate().transform(Vector3f(c)).sub(c))
+        // 매복 예고: 껍데기가 덜덜 떨린다(틈의 뼈 가시가 아랫판에 붙어 함께 떨린다), 뚜껑이 살짝 들썩
+        ShulkerParasite.tremble(sh)?.let { k ->
+            val a = 0.3f + 0.5f * k
+            p.o("base").x += a * sin(age * 4.3f); p.o("base").z += a * cos(age * 3.7f)
+            p.o("lid").x += a * sin(age * 3.9f + 1f); p.o("lid").z += a * cos(age * 4.7f)
+            p.o("lid").y -= (0.6f + 1.2f * k) * abs(sin(age * 2.9f))
+        }
+        // 채찍: 굵은 핏줄 둘이 겨눈 곳으로 뻗었다가(0.15초) 거둬들인다
+        whip?.let { (t, aim) ->
+            val reach = if (t < 0.3f) t / 0.3f else (1f - t) / 0.7f
+            p.tetherMax = 4f + 40f * reach
+            val off = Vector3f((aim.x - sh.x).toFloat(), (aim.y - sh.y).toFloat(), (aim.z - sh.z).toFloat())
+            p.tetherTo["strand0"] = off
+            p.tetherTo["strand2"] = Vector3f(off).add(0.25f, -0.15f, 0.2f)
+        }
     }
 
     /** 블레이즈 막대처럼 뼈대 위치를 절대값(픽셀)으로. */

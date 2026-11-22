@@ -28,7 +28,7 @@ from zmodel import Model, cube_polys, jar_texture, load_models, axis_rot  # noqa
 
 # 리그(E) 몹: 뼈대는 모델에서 그대로(큐브 없는 뼈대도 계층용으로). 서버 정의는 data/zomapo/rig/<몹>.json
 RIG_MOBS = ['enderman', 'creeper', 'spider', 'cave_spider', 'slime', 'magma_cube', 'phantom', 'guardian', 'elder_guardian',
-            'ghast', 'blaze', 'breeze', 'creaking', 'ravager', 'shulker']
+            'ghast', 'blaze', 'breeze', 'creaking', 'ravager', 'shulker', 'shulker_core']
 EYES = {'enderman': ['head'], 'spider': ['head'], 'cave_spider': ['head'], 'phantom': ['head'], 'creaking': ['head'], 'breeze': ['head']}
 RIGS = {'enderman': ['head', 'hat', 'body', 'right_arm', 'left_arm', 'right_leg', 'left_leg']}
 VANILLA = {   # 행글라이더 탑승자(바닐라 몹 그대로, 매달린 자세는 서버가 뼈대를 돌린다)

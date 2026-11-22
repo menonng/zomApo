@@ -1,6 +1,7 @@
 package dev.menonng.zomapo
 
 import dev.menonng.zomapo.command.ZomCommands
+import dev.menonng.zomapo.config.ZomConfig
 import dev.menonng.zomapo.gimmick.Zombified
 import dev.menonng.zomapo.wounds.WoundsSystem
 import net.fabricmc.api.ModInitializer
@@ -13,6 +14,7 @@ object ZomApo : ModInitializer {
 
     override fun onInitialize() {
         log.info("zomApo 초기화")
+        ZomConfig.load()
         WoundsSystem.register()
         ZomCommands.register()
         Zombified.register()

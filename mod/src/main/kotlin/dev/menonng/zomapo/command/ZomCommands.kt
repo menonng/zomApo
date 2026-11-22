@@ -7,6 +7,7 @@ import dev.menonng.zomapo.item.ZomItems
 import dev.menonng.zomapo.logic.effects.Bleeding
 import dev.menonng.zomapo.logic.effects.Infection
 import dev.menonng.zomapo.wounds.WoundsSystem
+import dev.menonng.zomapo.config.ZomConfig
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
@@ -21,6 +22,7 @@ import net.minecraft.world.item.ItemStack
  * - `/zomapo effect give <대상> infection [단계 1~3]`
  * - `/zomapo effect clear <대상>`
  * - `/zomapo give <대상> antidote|virus_crystal [개수]`
+ * - `/zomapo motion [강도 0~1]` — 리그 움직임 연출 강도(config/zomapo.properties 의 rig.motion_intensity 에 저장)
  */
 object ZomCommands {
     fun register() {
@@ -29,10 +31,23 @@ object ZomCommands {
                 Commands.literal("zomapo").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                     .then(effect())
                     .then(give())
+                    .then(motion())
                     .then(debug()),
             )
         }
     }
+
+    private fun motion(): LiteralArgumentBuilder<CommandSourceStack> =
+        Commands.literal("motion")
+            .executes { ctx ->
+                ctx.source.sendSuccess({ Component.literal("움직임 연출 강도는 ${"%.2f".format(ZomConfig.motionIntensity)}입니다(0이면 바닐라 동작).") }, false)
+                1
+            }
+            .then(Commands.argument("intensity", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.0, 1.0)).executes { ctx ->
+                ZomConfig.setMotionIntensity(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "intensity"))
+                ctx.source.sendSuccess({ Component.literal("움직임 연출 강도를 ${"%.2f".format(ZomConfig.motionIntensity)}(으)로 바꿨습니다.") }, true)
+                1
+            })
 
     private fun targets(ctx: CommandContext<CommandSourceStack>): Collection<ServerPlayer> = EntityArgument.getPlayers(ctx, "targets")
 
@@ -149,26 +164,31 @@ object ZomCommands {
                 .executes { ctx -> spawnCarrier(ctx, empty = false) }
                 .then(Commands.literal("empty").executes { ctx -> spawnCarrier(ctx, empty = true) })
                 .then(Commands.literal("kidnap").executes { ctx -> spawnCarrier(ctx, empty = true, zombie = false) }))
-            .then(Commands.literal("rig").then(Commands.argument("mob", com.mojang.brigadier.arguments.StringArgumentType.word()).executes { ctx ->
-                val p = ctx.source.playerOrException
-                val level = p.level()
-                val id = com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "mob")
-                val type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(net.minecraft.resources.Identifier.withDefaultNamespace(id)).orElse(null)
-                val e = type?.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND) as? net.minecraft.world.entity.Mob
-                if (e == null) {
-                    ctx.source.sendFailure(Component.literal("몹을 찾을 수 없습니다: $id")); return@executes 0
-                }
-                val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
-                e.snapTo(p.x + look.x * 5, p.y, p.z + look.z * 5, p.yRot + 180f, 0f)
-                e.yBodyRot = p.yRot + 180f
-                e.yHeadRot = p.yRot + 180f
-                e.isNoAi = true
-                e.setPersistenceRequired()
-                level.addFreshEntity(e)
-                dev.menonng.zomapo.gimmick.Zombified.mark(e, 3)
-                ctx.source.sendSuccess({ Component.literal("좀비화 몹을 만들었습니다: $id") }, false)
-                1
-            }))
+            .then(Commands.literal("rig").then(Commands.argument("mob", com.mojang.brigadier.arguments.StringArgumentType.word())
+                .executes { ctx -> spawnRig(ctx, false) }
+                .then(Commands.literal("ai").executes { ctx -> spawnRig(ctx, true) })))
+
+    /** 좀비화 리그 몹을 5블록 앞에 만든다. ai 가 없으면 가만히(NoAI), 있으면 바닐라 AI 그대로(움직임 연출 시험). */
+    private fun spawnRig(ctx: CommandContext<CommandSourceStack>, ai: Boolean): Int {
+        val p = ctx.source.playerOrException
+        val level = p.level()
+        val id = com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "mob")
+        val type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(net.minecraft.resources.Identifier.withDefaultNamespace(id)).orElse(null)
+        val e = type?.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND) as? net.minecraft.world.entity.Mob
+        if (e == null) {
+            ctx.source.sendFailure(Component.literal("몹을 찾을 수 없습니다: $id")); return 0
+        }
+        val look = p.lookAngle.let { net.minecraft.world.phys.Vec3(it.x, 0.0, it.z).normalize() }
+        e.snapTo(p.x + look.x * 5, p.y, p.z + look.z * 5, p.yRot + 180f, 0f)
+        e.yBodyRot = p.yRot + 180f
+        e.yHeadRot = p.yRot + 180f
+        e.isNoAi = !ai
+        e.setPersistenceRequired()
+        level.addFreshEntity(e)
+        dev.menonng.zomapo.gimmick.Zombified.mark(e, 3)
+        ctx.source.sendSuccess({ Component.literal("좀비화 몹을 만들었습니다: $id") }, false)
+        return 1
+    }
 
     private fun spawnCarrier(ctx: CommandContext<CommandSourceStack>, empty: Boolean, zombie: Boolean = true): Int {
         val p = ctx.source.playerOrException

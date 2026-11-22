@@ -1,5 +1,7 @@
 package dev.menonng.zomapo.logic.gimmick
 
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -52,7 +54,7 @@ enum class Gimmick(val mob: String, val title: String, val skill: String, val in
     CREAKING("creaking", "창백한 썩음", "늦은 굳기 · 시선이 끊길 때마다 가속", null),
     SLIME("slime", "늪 찌꺼기", "재결합 · 끈적한 착지", Interval.seconds(4.0, 7.0)),
     MAGMA_CUBE("magma_cube", "부패 마그마 큐브", "재결합 · 불씨 착지", Interval.seconds(4.0, 7.0)),
-    PHANTOM("phantom", "시체 운반자", "수송·투하 · 납치", null),
+    PHANTOM("phantom", "시체 운반자", "수송·투하 · 놀이기구", null),
     SILVERFISH("silverfish", "광산 좀벌레", "갉아먹기", null),
     ENDERMITE("endermite", "깜빡 진드기", "깜빡임", Interval.seconds(3.0, 6.0)),
     PILLAGER("pillager", "소음 약탈자", "소음 화살 · 불어나는 정찰대", Interval.seconds(12.0, 20.0)),
@@ -63,7 +65,7 @@ enum class Gimmick(val mob: String, val title: String, val skill: String, val in
     GUARDIAN("guardian", "익사체 지휘관", "지휘 광선 · 프리즈머린 몸", null),
     ELDER_GUARDIAN("elder_guardian", "썩은 장로", "썩은 저주 · 익사체 부르기 · 프리즈머린 몸", Interval.seconds(40.0, 80.0)),
     BREEZE("breeze", "녹슨 바람", "흡입 돌풍", null),
-    SHULKER("shulker", "기생 셜커", "가시 껍데기", null),
+    SHULKER("shulker", "기생 셜커", "가시 껍데기 · 줄 채찍 · 숙주 갈아타기", null),
     GHAST("ghast", "혼불 가스트", "울부짖음 · 터지는 위", null),
     BLAZE("blaze", "잿불 블레이즈", "꺼져 가는 불 · 재 구름", null),
     PIGLIN_BRUTE("piglin_brute", "진홍 브루트", "광폭 · 찢는 도끼", null),
@@ -116,13 +118,51 @@ object GimmickRules {
     const val MERGE_RADIUS = 4.0
 
     // 시체 운반자: 줍기 확률, 놓는 거리. 한 번 실어 나른 좀비는 근처에 다른 좀비가 있으면 다시 들지 않는다.
-    // 8블록 안에 들 좀비가 없으면 대상 플레이어 납치: 급강하가 1.8블록 안에 닿으면 붙잡아 4초 또는 땅에서 14블록까지 올라가 놓는다
+    // 8블록 안에 들 좀비가 없으면 대상 플레이어 납치: 급강하가 1.8블록 안에 닿으면 붙잡는다.
+    // 납치 = 놀이기구(2026-11-22, '높이 들어 떨어뜨리기'를 대신함): 좀비 승객처럼 매달고 날다가 좀비를 내려놓을 때와 같은 방식
+    // (급강하 바닥, 땅 3블록 안, 낙하 피해 없음)으로 내려놓는다. 내려놓는 곳은 근처 좀비 떼 곁(시체 운반의 반대 — 실어 나를
+    // 시체가 없으면 산 사람을 시체에게 실어 나른다), 떼가 없으면 붙잡은 곳에서 24~40블록 떨어진 곳(무리에서 떼어 놓기)
     const val PICKUP_CHANCE = 0.25
     const val DROP_HORIZONTAL = 6.0
     const val KIDNAP_SCAN = 8.0
     const val KIDNAP_REACH = 1.8
-    const val KIDNAP_TICKS = 80
-    const val KIDNAP_HEIGHT = 14.0
+    const val RIDE_HORDE_SCAN = 48.0
+    const val RIDE_HORDE_RADIUS = 8.0
+    const val RIDE_LAND_OFFSET = 5.0
+    const val RIDE_FALLBACK_MIN = 24.0
+    const val RIDE_FALLBACK_MAX = 40.0
+    const val RIDE_CRUISE_HEIGHT = 10.0
+    const val RIDE_DIVE_START = 6.0               // 내려놓을 곳 가로 6블록 안에서 급강하
+    const val RIDE_RELEASE_HEIGHT = 2.5           // 매달린 발이 땅 2.5블록 안이고
+    const val RIDE_LAND_SLACK = 4.0               // 내려놓을 곳 가로 4블록 안이면 놓는다(급강하 중 지나치면 낮게 돌아온다)
+    const val RIDE_MAX_TICKS = 400                // 20초 안에 못 가면 그 자리에서 급강하
+    const val RIDE_ALERT_RADIUS = 12.0            // 내려놓을 때 퍼덕임·비명에 대상 없는 좀비가 돌아본다
+    const val RIDE_COOLDOWN_TICKS = 1_200         // 내려진 플레이어는 1분 동안 다시 납치되지 않는다
+
+    /**
+     * 놀이기구 내려놓을 곳(x, z). zombies = 붙잡은 곳 48블록 안 좀비들의 (x, z).
+     * 8블록 안에 다른 좀비가 가장 많은 좀비를 떼 가운데로 보고, 그 떼의 평균 자리에서 붙잡은 곳 쪽으로 5블록.
+     * 좀비가 없으면 무작위 방향 24~40블록.
+     */
+    fun rideDropPoint(grabX: Double, grabZ: Double, zombies: List<Pair<Double, Double>>, random: Random): Pair<Double, Double> {
+        if (zombies.isEmpty()) {
+            val a = random.nextDouble(0.0, 2 * Math.PI)
+            val r = random.nextDouble(RIDE_FALLBACK_MIN, RIDE_FALLBACK_MAX)
+            return Pair(grabX + cos(a) * r, grabZ + sin(a) * r)
+        }
+        val r2 = RIDE_HORDE_RADIUS * RIDE_HORDE_RADIUS
+        fun d2(a: Pair<Double, Double>, b: Pair<Double, Double>) = (a.first - b.first).let { it * it } + (a.second - b.second).let { it * it }
+        val grab = Pair(grabX, grabZ)
+        val core = zombies.maxWith(compareBy<Pair<Double, Double>> { z -> zombies.count { d2(it, z) <= r2 } }.thenBy { -d2(it, grab) })
+        val horde = zombies.filter { d2(it, core) <= r2 }
+        val cx = horde.sumOf { it.first } / horde.size
+        val cz = horde.sumOf { it.second } / horde.size
+        var dx = grabX - cx
+        var dz = grabZ - cz
+        val len = kotlin.math.sqrt(dx * dx + dz * dz)
+        if (len < 1e-6) { val a = random.nextDouble(0.0, 2 * Math.PI); dx = cos(a); dz = sin(a) } else { dx /= len; dz /= len }
+        return Pair(cx + dx * RIDE_LAND_OFFSET, cz + dz * RIDE_LAND_OFFSET)
+    }
 
     // 소음 화살: 대장은 항상, 나머지 20%가 소음 사수. 맞은 자리(사람·블록)에서 소음 24 → 좀비가 그쪽으로 몰려와 근처 누구든 공격
     // (표식처럼 맞은 한 사람만 노리지 않는다. 여럿이 다니다 한 명이 맞아도 무리 전체가 위험)
@@ -215,6 +255,39 @@ object GimmickRules {
     // 기생 셜커의 가시 껍데기(2026-11-22 확정, 중력 교란은 대처가 어려워 뺐다): 닫혀 있을 때 근접으로 치면 가시 피해 2 를 돌려받는다.
     // 열려 있을 때 치거나 활·삼지창으로 치면 없다. 탄환은 바닐라 그대로(방패·쏘아 맞히기로 막는다)
     const val SHELL_THORNS = 2.0f
+
+    // 줄 채찍 매복(2026-11-22 채택): 닫힌 척하다 2블록 안에 들어오면 0.5초 껍데기가 떨리고(틈의 가시가 덜덜, 예고)
+    // 뚜껑이 확 열리며 기생체 줄이 후려친다: 피해 4 + 밀쳐내기(엔드 시티 가장자리를 생각해 약하게 0.8). 그 뒤 열려 있어 맞기 쉽다. 8초에 한 번
+    const val AMBUSH_RANGE = 2.0
+    const val AMBUSH_TELL_TICKS = 10
+    const val AMBUSH_WHIP_TICKS = 10
+    const val AMBUSH_HIT_TICK = 2                 // 뚜껑이 열린 뒤 2틱에 맞힌다
+    const val AMBUSH_HIT_RANGE = 2.8              // 예고 동안 물러나 이 밖이면 빗나간다
+    const val AMBUSH_DAMAGE = 4.0f
+    const val AMBUSH_KNOCKBACK = 0.8
+    const val AMBUSH_COOLDOWN_TICKS = 160
+
+    // 숙주 갈아타기(2026-11-22 채택): 기생 셜커가 죽으면 핵이 껍데기를 버리고 기어 나와(코그모 패시브처럼 정신없이 튀며)
+    // 16블록 안 가장 가까운 다른 셜커로 달린다. 5초 안에 닿으면 숨어든다: 바닐라 셜커는 기생 셜커가 되고, 기생 셜커는 최대 체력 +10(2겹까지)·체력 회복.
+    // 닿지 못하거나 숙주가 없으면 5초 뒤 터진다(2.5블록 안 피해 4). 달리는 동안 점점 부풀고 붉게 깜빡이는 간격이 짧아진다. 체력 6, 잡으면 끝
+    const val HOST_SCAN = 16.0
+    const val HOST_TICKS = 100
+    const val HOST_SPEED = 0.28                   // 이동 속도 속성(실측 0.38 → 초속 약 6블록이라 낮춤: 초속 약 4.4블록, 달리는 사람(5.6)이 따라잡는다)
+    const val HOST_CORE_HEALTH = 6.0
+    const val HOST_REACH = 1.3
+    const val HOST_BONUS_HEALTH = 10.0
+    const val HOST_MAX_STACKS = 2
+    const val HOST_BURST_DAMAGE = 4.0f
+    const val HOST_BURST_RADIUS = 2.5
+
+    /** 핵의 다급함 0~1(달린 시간 비율의 제곱): 부풂·깜빡임·흔들림 세기. */
+    fun coreUrgency(t: Int): Double = (t.toDouble() / HOST_TICKS).coerceIn(0.0, 1.0).let { it * it }
+
+    /** 붉게 깜빡이는 간격(틱): 처음 10 → 끝 2. */
+    fun coreFlashPeriod(t: Int): Int = (10 - 8 * (t.toDouble() / HOST_TICKS).coerceIn(0.0, 1.0)).toInt().coerceAtLeast(2)
+
+    /** 숨어든 핵이 기생 셜커에 주는 겹(0 → 1 → 2, 그 이상은 그대로). */
+    fun hostStacks(current: Int): Int = minOf(HOST_MAX_STACKS, current + 1)
 
     // 혼불 가스트: 울부짖음 소음 48, 죽을 때 작은 화염구 2~3개(Mobestiary: 위는 화염구로 가득)
     const val GHAST_CRY_RADIUS = 48

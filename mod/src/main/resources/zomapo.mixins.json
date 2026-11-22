@@ -11,8 +11,11 @@
     "IngredientMixin",
     "InteractionInvoker",
     "ItemDisplayInvoker",
+    "MobAccessor",
+    "PhantomAccessor",
     "PhantomRiderMixin",
     "PoisonTickMixin",
+    "ShulkerInvoker",
     "WitherTickMixin",
     "WoundHeartsMixin"
   ],

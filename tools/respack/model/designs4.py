@@ -1194,6 +1194,36 @@ def shulker():
         adds=adds)
 
 
+def shulker_core():
+    """기생체 핵(숙주 갈아타기): 셜커가 죽으면 껍데기를 버리고 기어 나와 다른 셜커로 숨어드는 핵.
+    셜커 디자인의 핵(머리 큐브, 먹힌 셜커의 눈)만 남기고 뚜껑·아랫판을 지운 뒤, 핵에 다리처럼 움직이는 촉수 6개를 단다.
+    리그 이름 shulker_core(진짜 몸은 투명한 엔더마이트). 촉수 기본 자세: 둘레로 퍼져 아래로 0.6 라디안."""
+    d = shulker()
+    d['remove'] = [('lid', 0), ('base', 0)]
+    d['tethers'] = None
+    d['inner_pose'] = None
+    legs = []
+    adds = []
+    for i in range(6):
+        name = f'tendril{i}'
+        ang = i * math.pi / 3 + (0.2 if i % 2 else -0.15)
+        dn = 0.6                                   # 아래로(모델 y 는 아래가 +)
+        u = (math.cos(ang) * math.cos(dn), math.sin(dn), math.sin(ang) * math.cos(dn))
+        rot = [math.asin(-u[2]), 0.0, math.atan2(u[0], -u[1])]   # 막대(-y)를 u 로: 기생체 줄과 같은 식
+        legs.append(dict(name=name, parent='head', pivot=[0.0, 3.0, 0.0], rot=rot))
+        thick = i % 2 == 0
+        w = 1.4 if thick else 1.0
+        ln = 5.5 if thick else 6.5
+        adds.append(A(name, [-w / 2, -2.4 - ln, -w / 2], [w, ln, w], strand_paint(thick)))
+    d['extra_bones'] = legs
+    d['adds'] = adds
+    d['view'] = (-35, 25)
+    d['concept'] = '기생체 핵: 셜커가 죽으면 껍데기를 버리고 기어 나와 5초 안에 16블록 안 다른 셜커로 숨어든다(못 닿으면 터진다) · 촉수 6개로 정신없이 튀며 달린다'
+    d['tell'] = '숙주 갈아타기: 달리는 동안 점점 부풀고 붉게 빨리 깜빡인다 — 잡으면 끝'
+    return d
+
+
 DESIGNS['shulker'] = shulker
-_KEEP_TELL = {'shulker', 'skeleton', 'stray', 'bogged', 'wither_skeleton', 'piglin_brute', 'magma_cube', 'ghast'}
+DESIGNS['shulker_core'] = shulker_core
+_KEEP_TELL = {'shulker', 'shulker_core', 'skeleton', 'stray', 'bogged', 'wither_skeleton', 'piglin_brute', 'magma_cube', 'ghast'}
 DESIGNS = {n: (f if n in _KEEP_TELL else D3._retell(n, f)) for n, f in DESIGNS.items()}

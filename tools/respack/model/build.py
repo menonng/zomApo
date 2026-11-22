@@ -58,7 +58,7 @@ def merged_data(models, d, zombified):
                     return r
             return None
         parent = find(data['root'])
-        parent['children'].append({'name': eb['name'], 'pose': list(eb['pivot']) + [0.0, 0.0, 0.0, 1.0, 1.0, 1.0], 'cubes': [], 'children': []})
+        parent['children'].append({'name': eb['name'], 'pose': list(eb['pivot']) + list(eb.get('rot', [0.0, 0.0, 0.0])) + [1.0, 1.0, 1.0], 'cubes': [], 'children': []})
     if zombified and d.get('overlay'):
         bones = {}
 
@@ -380,7 +380,7 @@ TITLE = {
     'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트', 'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골',
     'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)', 'wither_skeleton': '진홍 해골(위더 스켈레톤)',
     'piglin_brute': '진홍 브루트', 'pillager': '소음 약탈자', 'vindicator': '도끼잡이(변명자)', 'evoker': '강령 소환사',
-    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '기생 셜커', 'ravager': '썩은 파괴수',
+    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '기생 셜커', 'shulker_core': '기생체 핵(숙주 갈아타기)', 'ravager': '썩은 파괴수',
 }
 METHOD = {'E': '리그', 'B': '장비 덧씌움 + 머리 아이템 (몸 텍스처는 바닐라)', 'C': '머리 아이템 (몸 텍스처는 바닐라)', 'D': '색 변형 텍스처'}
 

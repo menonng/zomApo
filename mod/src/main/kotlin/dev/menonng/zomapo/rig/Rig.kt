@@ -77,6 +77,10 @@ class Pose(val def: RigDef) {
     val root = Quaternionf()         // 몸 방향 다음에 곱하는 회전
     val lift = Vector3f()            // 몸 기준 띄움(블록)
     val rootScale = Vector3f(1f, 1f, 1f)
+    /** 줄 뼈대의 끝을 이번 틱만 다른 곳으로(몹 발 기준 세계 블록 오프셋): 셜커 줄 채찍이 대상에게 뻗을 때. */
+    val tetherTo: MutableMap<String, Vector3f> = HashMap()
+    /** 줄 채찍 최대 길이(픽셀). */
+    var tetherMax = 40f
 
     fun reset() {
         for (b in def.bones) rot.getValue(b.name).set(b.rest)
@@ -86,6 +90,8 @@ class Pose(val def: RigDef) {
         root.identity()
         lift.zero()
         rootScale.set(1f, 1f, 1f)
+        tetherTo.clear()
+        tetherMax = 40f
     }
 
     fun r(b: String): Vector3f = rot.getValue(b)
@@ -134,6 +140,14 @@ class RigInstance(val def: RigDef, private val level: ServerLevel, pos: Vec3) {
         return rootQ.transform(local(t, pose))
     }
 
+    /** local 의 역: 몹 발 기준 세계 오프셋(블록) → 바닐라 모델 좌표(픽셀). apply 안에서(rootQ 가 이번 틱 값일 때) 쓴다. */
+    private fun modelPoint(w: Vector3f, pose: Pose): Vector3f {
+        val l = Quaternionf(rootQ).conjugate().transform(Vector3f(w)).sub(pose.lift)
+        val o = def.offset
+        val sc = pose.rootScale
+        return Vector3f(16f * (-l.x / sc.x - o.x), 16f * (-l.y / sc.y - o.y + 1.501f), 16f * (l.z / sc.z - o.z))
+    }
+
     private fun local(tPx: Vector3f, pose: Pose): Vector3f {
         val o = def.offset
         val x = -(o.x + tPx.x / 16f)
@@ -175,7 +189,13 @@ class RigInstance(val def: RigDef, private val level: ServerLevel, pos: Vec3) {
      */
     private fun tether(b: BoneDef, tz: Tether, o: Vector3f, pose: Pose) {
         val pivot = Vector3f(b.pivot).add(o)
-        val target = world.getValue(tz.to).transformPosition(Vector3f(tz.at))
+        val over = pose.tetherTo[b.name]
+        val target = if (over != null) {
+            val t = modelPoint(over, pose)
+            val dv = Vector3f(t).sub(pivot)
+            if (dv.length() > pose.tetherMax) dv.normalize(pose.tetherMax)
+            Vector3f(pivot).add(dv)
+        } else world.getValue(tz.to).transformPosition(Vector3f(tz.at))
         val dir = Vector3f(target).sub(pivot)
         val dist = dir.length().coerceAtLeast(0.01f)
         dir.div(dist)
