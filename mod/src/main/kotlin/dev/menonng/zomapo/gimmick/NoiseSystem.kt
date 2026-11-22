@@ -16,7 +16,7 @@ import java.util.WeakHashMap
  * 소리가 나면 반경 안의 좀비 계열 중 지금 대상이 없는 개체(가까운 순 최대 8, 같은 좀비는 10초에 한 번, 서버 전체 초당 40)가
  * 소리 난 곳으로 걸어가 살핀다. 30초 안에 못 가면 그만둔다. 도착하거나 가는 길에 바닐라처럼 플레이어를 보면 그쪽을 노린다.
  * [emit] 의 strike 를 켜면(소음 화살) 소리 난 곳 10블록 안에 들어선 좀비가 그 근처의 누구든(맞은 사람만이 아니라) 노린다.
- * 지금 소리를 내는 것: 소음 약탈자의 화살. 바닐라 진동 전체 연결(걷기·부수기 등)은 아직이다.
+ * 소리를 내는 것: 소음 약탈자의 화살, 비명꾼, 바닐라 진동 전체(VibrationNoise, 2026-11-22 연결).
  */
 object NoiseSystem {
     private class Investigation(val pos: Vec3, val until: Long, val strike: Boolean)

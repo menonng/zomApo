@@ -88,7 +88,10 @@ object SpawnLevels {
         val org = if (override != null) SpawnOrigin.EVENT else origin(reason)
         val entityId = BuiltInRegistries.ENTITY_TYPE.getKey(mob.type).toString()
         when {
-            mob is Zombie || mob is Zoglin -> { if (reason == EntitySpawnReason.REINFORCEMENT) inheritFromNearby(mob) else stamp(mob, lv, src) }
+            mob is Zombie || mob is Zoglin -> {
+                if (reason == EntitySpawnReason.REINFORCEMENT) inheritFromNearby(mob)
+                else { stamp(mob, lv, src); if (reason != EntitySpawnReason.COMMAND) dev.menonng.zomapo.gimmick.VariantSystem.roll(mob, lv) }
+            }
             Zombification.shouldZombify(entityId, lv, org) -> { Zombified.mark(mob, lv); stamp(mob, lv, src) }
             else -> return
         }

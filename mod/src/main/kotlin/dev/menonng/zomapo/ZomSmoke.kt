@@ -158,6 +158,7 @@ internal object ZomSmoke {
         brain.breakAndCarry(level, z, o, level.getBlockState(o), ai.profile(4))
         if (!level.getBlockState(o).isAir) f += "부순 흙이 남음"
         if (brain.carried(z) != 1) f += "부순 흙을 손에 들지 않음: ${brain.carried(z)}"
+        set(o.above(3), net.minecraft.world.level.block.Blocks.AIR)      // 이전 스모크 실행이 남긴 블록 치우기
         brain.placeCarried(level, z, o.above(3))
         if (!level.getBlockState(o.above(3)).`is`(net.minecraft.world.level.block.Blocks.DIRT)) f += "들고 있던 흙을 쌓지 않음"
         if (brain.carried(z) != 0) f += "쌓은 뒤에도 블록이 남음"
@@ -173,6 +174,16 @@ internal object ZomSmoke {
         brain.tryDoor(level, z, v, dev.menonng.zomapo.ai.ZombieBrain.St(), System.currentTimeMillis())
         if (level.getBlockState(d.east()).getValue(net.minecraft.world.level.block.DoorBlock.OPEN) != true) f += "Lv2 좀비가 참나무 문을 열지 않음"
         z.discard(); v.discard()
+        // 변종: 탱커 체력 60·크기, 러너 체력 14
+        val vs = dev.menonng.zomapo.gimmick.VariantSystem
+        val tank = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        vs.apply(tank, dev.menonng.zomapo.logic.spawn.Variant.TANK)
+        if (tank.maxHealth != 60f) f += "탱커 체력이 60 이 아님: ${tank.maxHealth}"
+        if (Math.abs(tank.scale - 1.15f) > 0.01f) f += "탱커 크기가 1.15 가 아님: ${tank.scale}"
+        val runner = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        vs.apply(runner, dev.menonng.zomapo.logic.spawn.Variant.RUNNER)
+        if (runner.maxHealth != 14f) f += "러너 체력이 14 가 아님: ${runner.maxHealth}"
+        if (dev.menonng.zomapo.ai.ZombieBrain.profileOf(runner) != null) {} // 스폰 레벨 없으면 지능 없음
         return f
     }
 }

@@ -11,6 +11,7 @@
     "EndermanTeleportMixin",
     "EntityAccessor",
     "FoodDataMixin",
+    "GameEventNoiseMixin",
     "IngredientMixin",
     "InteractionInvoker",
     "ItemDisplayInvoker",
