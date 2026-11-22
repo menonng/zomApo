@@ -15,6 +15,8 @@ import kotlin.random.Random
  *   그래서 근처의 누구에게나 보이고, 누구나 싸울 수 있다.
  * - 길찾기는 32블록씩 끊은 경유점으로. 2초 동안 가까워지지 못하면 앞 블록을 부수고, 10초째 못 가면 대상 쪽으로 최대 16블록 '도약'한다.
  * - 대상이 차원을 옮기면 60초 뒤 같은 차원의 대응 좌표(네더는 ÷8, 오버월드로는 ×8)로 넘어간다.
+ *   **엔드는 따라가지 않는다**(2026-11-22): 대상이 엔드에 있는 동안 알파는 그 자리에 멈춰 기다리고(움직이지도, 부수지도, 도약하지도 않는다),
+ *   대상이 엔드에서 나오면 다시 쫓는다. 엔드에 20분 넘게 머물면 사라진다.
  * - 대상이 접속을 끊으면 그 자리에서 20분 기다리다 사라진다. 대상이 죽으면 사라진다(다른 사람을 노리지 않는다).
  * - 알림은 대상에게만(보스바 없음). 빨간 발광 테두리도 대상에게만 보이게 보낸다.
  */
@@ -29,10 +31,9 @@ object AlphaRules {
     /** 무지개 발광(monun 저장소의 무지개 테두리 방식): 대상에게만 보내는 팀 색을 2틱마다 다음 색으로. */
     const val RAINBOW_STEP_TICKS = 2
     val RAINBOW = listOf("red", "gold", "yellow", "green", "aqua", "blue", "light_purple")
-    /** 엔드로 넘어갈 때: 같은 좌표는 공허일 수 있으므로 대상 둘레 16~32블록 고리에서 설 수 있는 자리를 찾는다. */
-    const val END_RING_MIN = 16.0
-    const val END_RING_MAX = 32.0
-    const val END_TRIES = 24
+    /** 대상이 엔드에 이만큼 머물면 알파가 사라진다(20분, 접속 끊김과 같은 길이). 그동안 알파는 그 자리에 멈춰 있다. */
+    const val END_WAIT_TICKS = 24_000
+    const val END = "minecraft:the_end"
     const val CHUNK_TICKET_RADIUS = 2           // 알파가 붙잡는 청크 반경
     const val WAYPOINT_STEP = 32.0
     const val BREAK_AFTER_TICKS = 40            // 2초 동안 못 가까워지면 앞 블록 부수기
@@ -97,11 +98,15 @@ object AlphaRules {
 
     fun rainbowColor(tick: Long): String = RAINBOW[((tick / RAINBOW_STEP_TICKS) % RAINBOW.size).toInt()]
 
-    /** 엔드 도착 후보: 대상 둘레 고리 위 점들(가까운 쪽부터). 모드는 차례로 설 수 있는지(아래 블록·머리 공간) 보고, 하나도 없으면 대상 바로 뒤 4블록. */
-    fun endArrivalCandidates(random: Random, tx: Double, tz: Double): List<Pair<Double, Double>> =
-        (0 until END_TRIES).map {
-            val a = random.nextDouble(0.0, 2 * Math.PI)
-            val r = END_RING_MIN + (END_RING_MAX - END_RING_MIN) * it / (END_TRIES - 1)
-            Pair(tx + Math.cos(a) * r, tz + Math.sin(a) * r)
-        }
+    enum class Follow { CHASE, HOLD, DESPAWN }
+
+    /**
+     * 대상이 있는 차원에 따른 알파의 할 일. 엔드로는 넘어가지 않는다(같은 좌표는 공허일 수 있고, 대상 곁으로 옮겨 주는 것은 밸런스 붕괴):
+     * 대상이 엔드에 있으면 멈춰 기다리고(HOLD), 20분이 지나면 사라진다(DESPAWN). 그 밖에는 평소처럼(CHASE, 다른 차원이면 60초 뒤 넘어감).
+     */
+    fun follow(targetDimension: String, ticksTargetInEnd: Int): Follow = when {
+        targetDimension != END -> Follow.CHASE
+        ticksTargetInEnd >= END_WAIT_TICKS -> Follow.DESPAWN
+        else -> Follow.HOLD
+    }
 }

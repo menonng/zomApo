@@ -122,8 +122,11 @@ class AlphaTest {
         assertEquals("red", AlphaRules.rainbowColor(0))
         assertEquals("gold", AlphaRules.rainbowColor(2))
         assertEquals("red", AlphaRules.rainbowColor(2L * AlphaRules.RAINBOW.size))
-        val c = AlphaRules.endArrivalCandidates(kotlin.random.Random(1), 0.0, 0.0)
-        assertTrue(c.all { val d = Math.hypot(it.first, it.second); d >= AlphaRules.END_RING_MIN - 1e-9 && d <= AlphaRules.END_RING_MAX + 1e-9 })
+        // 엔드는 따라가지 않는다: 멈춰 기다리다 20분이면 사라진다
+        assertEquals(AlphaRules.Follow.CHASE, AlphaRules.follow("minecraft:the_nether", 0))
+        assertEquals(AlphaRules.Follow.HOLD, AlphaRules.follow("minecraft:the_end", 0))
+        assertEquals(AlphaRules.Follow.HOLD, AlphaRules.follow("minecraft:the_end", AlphaRules.END_WAIT_TICKS - 1))
+        assertEquals(AlphaRules.Follow.DESPAWN, AlphaRules.follow("minecraft:the_end", AlphaRules.END_WAIT_TICKS))
     }
 
     @Test

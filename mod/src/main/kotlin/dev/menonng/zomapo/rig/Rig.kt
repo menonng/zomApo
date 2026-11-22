@@ -32,8 +32,11 @@ import java.io.InputStreamReader
  */
 data class BoneDef(val name: String, val pivot: Vector3f, val rest: Vector3f, val parent: String?, val model: Boolean, val scale: Float)
 
+/** 줄 뼈대(셜커 기생체 줄): 피벗에서 r0 나간 곳부터 [to] 뼈대 기준 점 [at] 까지, 길이 [len] 픽셀 막대(-y)를 돌리고 늘린다. */
+data class Tether(val to: String, val at: Vector3f, val len: Float, val r0: Float)
+
 class RigDef(val id: String, val bones: List<BoneDef>, val upper: Set<String> = emptySet(), val hip: Vector3f = Vector3f(),
-             val offset: Vector3f = Vector3f()) {
+             val offset: Vector3f = Vector3f(), val tethers: Map<String, Tether> = emptyMap()) {
     val byName: Map<String, BoneDef> = bones.associateBy { it.name }
 }
 
@@ -57,8 +60,12 @@ object RigDefs {
             BoneDef(o["name"].asString, vec(o.getAsJsonArray("pivot")), vec(o.getAsJsonArray("rest")),
                 o["parent"]?.takeIf { !it.isJsonNull }?.asString, o["model"].asBoolean, o["scale"]?.asFloat ?: 1f)
         }
+        val tethers = root.getAsJsonObject("tethers")?.entrySet()?.associate { (name, v) ->
+            val o = v.asJsonObject
+            name to Tether(o["to"].asString, vec(o.getAsJsonArray("at")), o["len"].asFloat, o["r0"]?.asFloat ?: 0f)
+        } ?: emptyMap()
         val (upper, hip, off) = extras[id] ?: Triple(emptySet(), Vector3f(), Vector3f())
-        return RigDef(id, bones, upper, hip, off)
+        return RigDef(id, bones, upper, hip, off, tethers)
     }
 }
 
@@ -141,6 +148,8 @@ class RigInstance(val def: RigDef, private val level: ServerLevel, pos: Vec3) {
         for (b in def.bones) {
             val r = pose.r(b.name)
             val o = pose.o(b.name)
+            val tz = def.tethers[b.name]
+            if (tz != null && world.containsKey(tz.to)) { tether(b, tz, o, pose); continue }
             val local = Matrix4f().translate(b.pivot.x + o.x, b.pivot.y + o.y, b.pivot.z + o.z).rotateZYX(r.z, r.y, r.x)
             val m = when {
                 b.parent != null && world.containsKey(b.parent) -> Matrix4f(world.getValue(b.parent)).mul(local)
@@ -157,6 +166,29 @@ class RigInstance(val def: RigDef, private val level: ServerLevel, pos: Vec3) {
         }
         if (pos.distanceToSqr(lastPos) > 1e-6) bones.values.forEach { it.setPos(pos.x, pos.y, pos.z) }
         lastPos = pos
+    }
+
+    /**
+     * 줄 뼈대: 피벗 → 줄 끝(다른 뼈대 기준 점, 이미 계산한 그 뼈대 행렬로) 방향으로 막대를 돌리고 길이 방향으로만 늘린다.
+     * 늘림은 뼈대 자신의 y 축이어야 하므로 표시 변환의 오른쪽 회전 대신 왼쪽 회전에 뼈대 회전을 넣는다
+     * (왼쪽 = Q · S R S, 크기 = 2 · (1, 늘림, 1), 오른쪽 = 없음; S 는 대각이라 크기와 자리를 바꿀 수 있다).
+     */
+    private fun tether(b: BoneDef, tz: Tether, o: Vector3f, pose: Pose) {
+        val pivot = Vector3f(b.pivot).add(o)
+        val target = world.getValue(tz.to).transformPosition(Vector3f(tz.at))
+        val dir = Vector3f(target).sub(pivot)
+        val dist = dir.length().coerceAtLeast(0.01f)
+        dir.div(dist)
+        val r0 = minOf(tz.r0, dist * 0.5f)
+        val start = Vector3f(dir).mul(r0).add(pivot)
+        val k = (dist - r0) / tz.len
+        val q = Quaternionf().rotationTo(0f, -1f, 0f, dir.x, dir.y, dir.z)
+        world[b.name] = Matrix4f().translate(start).rotate(q).scale(1f, k, 1f)
+        val d = bones[b.name] ?: return
+        val p = rootQ.transform(local(start, pose))
+        val s = 2f * b.scale * (pose.scale[b.name] ?: 1f)
+        val left = Quaternionf(rootQ).mul(Quaternionf(-q.x, -q.y, q.z, q.w))
+        setTransform(d, Transformation(p, left, Vector3f(pose.rootScale).mul(s, s * k, s), Quaternionf()))
     }
 
     companion object {

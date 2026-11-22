@@ -28,7 +28,7 @@ from zmodel import Model, cube_polys, jar_texture, load_models, axis_rot  # noqa
 
 # 리그(E) 몹: 뼈대는 모델에서 그대로(큐브 없는 뼈대도 계층용으로). 서버 정의는 data/zomapo/rig/<몹>.json
 RIG_MOBS = ['enderman', 'creeper', 'spider', 'cave_spider', 'slime', 'magma_cube', 'phantom', 'guardian', 'elder_guardian',
-            'ghast', 'blaze', 'breeze', 'creaking', 'ravager']
+            'ghast', 'blaze', 'breeze', 'creaking', 'ravager', 'shulker']
 EYES = {'enderman': ['head'], 'spider': ['head'], 'cave_spider': ['head'], 'phantom': ['head'], 'creaking': ['head'], 'breeze': ['head']}
 RIGS = {'enderman': ['head', 'hat', 'body', 'right_arm', 'left_arm', 'right_leg', 'left_leg']}
 VANILLA = {   # 행글라이더 탑승자(바닐라 몹 그대로, 매달린 자세는 서버가 뼈대를 돌린다)
@@ -148,7 +148,7 @@ def export(m, mob, bones, out, emission_for=lambda b, i, c: 0):
             write_json(os.path.join(root, 'items', 'rig', mob, b + '.json'),
                        {'model': {'type': 'minecraft:model', 'model': f'zomapo:rig/{mob}/{b}', 'tints': [{'type': 'minecraft:dye', 'default': -1}]}})
         parent = part.parent.name if part.parent is not None and part.parent.name != 'root' else None
-        meta[b] = {'pivot': [float(t) for t in part.offset], 'rest': [round(float(t), 5) for t in part.rot], 'parent': parent, 'elements': len(els)}
+        meta[b] = {'pivot': [float(t) for t in getattr(part, '_pivot0', part.offset)], 'rest': [round(float(t), 5) for t in part.rot], 'parent': parent, 'elements': len(els)}
     write_json(os.path.join(out, 'rig-' + mob + '.json'), meta)
     return meta
 
@@ -158,14 +158,18 @@ def bones_of(m):
     return [p.name for p in m.root.walk() if p.name != 'root']
 
 
-def server_def(mob, m, meta, data_dir):
-    """서버 리그 정의(뼈대 이름·부모·피벗·기본 회전·모델 유무·눈 레이어 덮기 배율). 바닐라 모델 배치 숫자만 담는다."""
+def server_def(mob, m, meta, data_dir, tethers=None):
+    """서버 리그 정의(뼈대 이름·부모·피벗·기본 회전·모델 유무·눈 레이어 덮기 배율). 바닐라 모델 배치 숫자만 담는다.
+    tethers: 줄 뼈대(셜커 기생체 줄) — 서버가 매 틱 '줄 끝'(다른 뼈대 기준 점)을 향해 돌리고 늘린다."""
     bones = []
     for b in bones_of(m):
         v = meta[b]
         bones.append({'name': b, 'parent': v['parent'], 'pivot': v['pivot'], 'rest': v['rest'], 'model': v['elements'] > 0,
                       'scale': 1.06 if b in EYES.get(mob, []) else 1.0})
-    write_json(os.path.join(data_dir, mob + '.json'), {'id': mob, 'bones': bones})
+    out = {'id': mob, 'bones': bones}
+    if tethers:
+        out['tethers'] = tethers
+    write_json(os.path.join(data_dir, mob + '.json'), out)
 
 
 def _mk(*p):
@@ -216,7 +220,7 @@ def main():
                 return glow_inner.get(bone, 0) if inner.get(bone) == i else 0
             meta = export(m, mob, bones_of(m), a.out, em)
             if a.data:
-                server_def(mob, m, meta, a.data)
+                server_def(mob, m, meta, a.data, d.get('tethers'))
         print(mob, {b: v['elements'] for b, v in meta.items()})
     core_model(a.out)
 

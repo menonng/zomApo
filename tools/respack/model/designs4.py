@@ -25,7 +25,7 @@ import designs as D
 import designs3 as D3
 import rot as R
 from designs import A, bfaces, mat, chain
-from paint import ramp, stain, put, get, lum, mix, speckle, threads, pick
+from paint import Noise, ramp, stain, put, get, lum, mix, speckle, threads, pick
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zombify_textures as zt  # noqa: E402  1차 텍스처 좀비화
@@ -976,56 +976,222 @@ DESIGNS.update({
     'magma_cube': magma_cube, 'skeleton': skeleton, 'stray': stray, 'bogged': bogged, 'wither_skeleton': wither_skeleton,
     'piglin_brute': piglin_brute, 'pillager': pillager, 'evoker': evoker, 'vindicator': vindicator, 'ravager': ravager,
 })
-_shulker3 = D3.DESIGNS['shulker']
+# ================================================================== 셜커: 깨끗한 껍데기 속의 기생체(리그)
+# 보라 껍데기는 바닐라 그대로(셜커의 껍데기는 껍질일 뿐). 안의 셜커를 다른 생명체가 먹어 치웠다:
+# 가운데 기생체 핵(바닐라 머리 자리)에서 핏줄·점액 줄이 뚜껑 아랫면으로 이어져, 뚜껑이 들리고 돌 때 함께 늘어나고 꼬인다.
+# 줄은 뼈대(strand0~5)마다 길이 8 픽셀 막대를 서버가 '줄 끝'(뚜껑 기준 점)을 향해 돌리고 늘린다(rig JSON 'tethers').
+
+SHULKER_CORE = (0.0, 15.0, 0.0)     # 핵 가운데(바닐라 머리 큐브 가운데) = 줄 뼈대 피벗
+STRAND_LEN = 8.0
+SHULKER_STRANDS = [   # (뼈대, 뚜껑 기준 x, z(아랫면 y = -4), 굵은 핏줄인가)
+    ('strand0', 5.4, 1.2, True), ('strand1', 1.6, 5.0, False), ('strand2', -4.4, 3.6, True),
+    ('strand3', -5.2, -1.4, False), ('strand4', -1.8, -5.6, True), ('strand5', 3.8, -3.8, False)]
+PARA = ramp('#22060F', '#3D0C1C', '#5E152A', '#842238', '#A8384A', '#C85A60')   # 기생체 살(검붉은 보라)
+PARA_VEIN = ramp('#12030A', '#260612', '#420C1E')
+SLIME = ramp('#5A6420', '#86922E', '#B2BE4C', '#D8E27C', '#F0F6B4')              # 점액(누런 초록)
+SPINE = ramp('#4A3226', '#7A6450', '#A89478', '#D2C4A6', '#F0E8D2')              # 뼈 가시
 
 
-def shulker_inner(img, data):
-    """속(뚜껑이 열리면 보이는 곳): 아랫판 윗면·뚜껑 아랫면은 썩은 속살과 고름(가장자리는 껍데기 단면), 머리는 좀비처럼."""
+def _uv_of(rect, k, x, z):
+    """셜커 뚜껑 아랫면·아랫판 윗면(16×16)에서 모델 x, z(픽셀) 자리의 텍스처 좌표(둘 다 col = x + 8, row = 8 - z)."""
+    return rect[0] + (x + 8) * k, rect[1] + (8 - z) * k
+
+
+def _line(img, a, b, col_fn, width=1, rr=None, jitter=0.0):
+    (x0, y0), (x1, y1) = a, b
+    n = max(1, int(max(abs(x1 - x0), abs(y1 - y0)) * 1.5))
+    off = 0.0
+    for i in range(n + 1):
+        t = i / n
+        if rr is not None and jitter:
+            off = max(-1.5, min(1.5, off + rr.uniform(-jitter, jitter)))
+        x = x0 + (x1 - x0) * t - (y1 - y0) / max(1e-6, math.hypot(x1 - x0, y1 - y0)) * off
+        y = y0 + (y1 - y0) * t + (x1 - x0) / max(1e-6, math.hypot(x1 - x0, y1 - y0)) * off
+        wv = width if callable(width) is False else width(t)
+        for dx in range(-int(wv // 2), int(wv - wv // 2)):
+            for dy in range(-int(wv // 2), int(wv - wv // 2)):
+                put(img, int(round(x)) + dx, int(round(y)) + dy, col_fn(t, i))
+
+
+def _blob(img, cx, cy, r, rp, rr, hi=None):
+    for y in range(int(cy - r - 1), int(cy + r + 2)):
+        for x in range(int(cx - r - 1), int(cx + r + 2)):
+            d = math.hypot(x + 0.5 - cx, y + 0.5 - cy) / max(0.5, r)
+            if d < 1:
+                put(img, x, y, pick(rp, 0.85 - 0.6 * d + rr.uniform(-0.08, 0.08), x, y))
+    if hi:
+        put(img, int(cx - r * 0.3), int(cy - r * 0.3), hi)
+
+
+def shulker_parasite(img, data):
+    """껍데기 안쪽(뚜껑 아랫면·아랫판 윗면)과 핵(머리 자리). 껍데기 바깥면은 바닐라 그대로 둔다."""
+    k = D.SCALE[0]
     lid, base, head = bfaces(data, 'lid'), bfaces(data, 'base'), bfaces(data, 'head')
-    FLESHIN = ramp('#2A1618', '#4A2428', '#6E3A3A', '#8E5250', '#B0706A')
-    SHELL = ramp('#2E1C34', '#47304F', '#62466C')
-    PUS = ramp('#4E5A18', '#7A8A22', '#B4C24A')
-    rr = random.Random(531)
-    for rect in (base['up'], lid['down']):
-        x0, y0, w, h = rect
+    rr = random.Random(611)
+    n = Noise(612, cell=2.2 * k)
+    # 뚜껑 아랫면: 가운데로 갈수록 기생체 막이 덮고, 줄 끝마다 붙은 자리(살 혹)와 그 사이 핏줄 그물
+    L = lid['down']
+    for y in range(L[3]):
+        for x in range(L[2]):
+            mx, mz = x / k - 8, 8 - y / k
+            r = math.hypot(mx, mz)
+            edge = min(x, y, L[2] - 1 - x, L[3] - 1 - y)
+            if edge < k:
+                continue                                     # 껍데기 단면(바닐라 색)
+            cover = max(0.0, 1 - r / 7.2) + 0.25 * (n(x, y) - 0.5)
+            if cover > 0.18:
+                put(img, L[0] + x, L[1] + y, pick(PARA, 0.15 + 0.5 * min(1, cover) + 0.15 * n(x + 40, y), x, y))
+    ends = [_uv_of(L, k, sx, sz) for _, sx, sz, _ in SHULKER_STRANDS]
+    for i, (ex, ey) in enumerate(ends):
+        nx, ny = ends[(i + 1) % len(ends)]
+        _line(img, (ex, ey), (nx, ny), lambda t, j: PARA_VEIN[1 + (j % 3 == 0)], 1, rr, 0.35)
+        _line(img, (ex, ey), _uv_of(L, k, 0, 0), lambda t, j: PARA_VEIN[2] if t < 0.7 else PARA[2], 1, rr, 0.3)
+    for (ex, ey), (_, _, _, thick) in zip(ends, SHULKER_STRANDS):
+        _blob(img, ex, ey, (1.6 if thick else 1.2) * k, PARA if thick else SLIME, rr, hi=SLIME[4])
+    # 아랫판 윗면: 핵이 앉은 자리의 살 덩어리에서 뿌리가 껍데기 가장자리 쪽으로 퍼진다, 점액 웅덩이
+    B = base['up']
+    cx, cy = _uv_of(B, k, 0, 0)
+    for y in range(B[3]):
+        for x in range(B[2]):
+            mx, mz = x / k - 8, 8 - y / k
+            r = math.hypot(mx, mz)
+            if min(x, y, B[2] - 1 - x, B[3] - 1 - y) < k:
+                continue
+            cover = max(0.0, 1 - r / 4.6) + 0.3 * (n(x + 90, y + 7) - 0.5)
+            if cover > 0.12:
+                put(img, B[0] + x, B[1] + y, pick(PARA, 0.25 + 0.55 * min(1, cover), x, y))
+    for a in range(7):
+        ang = a * 2 * math.pi / 7 + rr.uniform(-0.3, 0.3)
+        rlen = rr.uniform(5.2, 7.2)
+        tip = (cx + math.cos(ang) * rlen * k, cy + math.sin(ang) * rlen * k)
+        _line(img, (cx, cy), tip, lambda t, j: PARA[3] if t < 0.4 else PARA[2] if t < 0.75 else PARA[1],
+              lambda t: 2 if t < 0.45 else 1, rr, 0.4)
+    for _ in range(4):
+        ang, rad = rr.uniform(0, 2 * math.pi), rr.uniform(3, 6)
+        _blob(img, cx + math.cos(ang) * rad * k, cy + math.sin(ang) * rad * k, rr.uniform(0.6, 1.1) * k, SLIME, rr, hi=SLIME[4])
+    # 핵(머리 자리 6×6×6): 검붉은 살덩이에 검은 핏줄과 고름 혹, 앞면에 먹힌 셜커의 눈 하나가 남아 대상을 본다
+    for face, (x0, y0, w, h) in head.items():
         for y in range(h):
             for x in range(w):
-                edge = min(x, y, w - 1 - x, h - 1 - y)
-                if edge < 1:
-                    put(img, x0 + x, y0 + y, pick(SHELL, 0.5, x, y))
-                else:
-                    t = 0.35 + 0.35 * (1 - abs(x - w / 2) / (w / 2)) * (1 - abs(y - h / 2) / (h / 2)) + rr.uniform(-0.1, 0.1)
-                    put(img, x0 + x, y0 + y, pick(FLESHIN, t, x, y))
-        for _ in range(5):
-            cx, cy = x0 + rr.randrange(2, w - 2), y0 + rr.randrange(2, h - 2)
-            put(img, cx, cy, PUS[2]); put(img, cx + 1, cy, PUS[1]); put(img, cx, cy + 1, PUS[0])
-        for _ in range(3):
-            put(img, x0 + rr.randrange(2, w - 2), y0 + rr.randrange(2, h - 2), FLESHIN[0])
-    # 머리: 썩은 회녹색 살, 왼쪽 병든 눈, 오른쪽 아래 드러난 턱뼈
-    SKIN = ramp('#2E3428', '#454E3A', '#5E6A50', '#7A8668')
-    for face, r in head.items():
-        for y in range(r[3]):
-            for x in range(r[2]):
-                put(img, r[0] + x, r[1] + y, pick(SKIN, 0.35 + rr.uniform(0, 0.4), x, y))
-    f = head['front']
-    put(img, f[0] + 1, f[1] + 2, R.SICK_EYE[3]); put(img, f[0] + 2, f[1] + 2, R.SICK_EYE[2])
-    put(img, f[0] + 4, f[1] + 2, (0x14, 0x10, 0x10, 255))
-    for x in range(3, 6):
-        put(img, f[0] + x, f[1] + 4, R.BONE[4] if x % 2 else R.BONE[2])
-    put(img, f[0] + 4, f[1] + 5, R.BONE[3])
+                t = 0.3 + 0.45 * n(x0 + x + 300, y0 + y) + (0.1 if face == 'up' else -0.1 if face == 'down' else 0)
+                put(img, x0 + x, y0 + y, pick(PARA, t, x, y))
+        for _ in range(2):
+            px, py = x0 + rr.randrange(w), y0 + rr.randrange(h)
+            for _s in range(w):
+                put(img, px, py, PARA_VEIN[rr.randrange(3)])
+                px = max(x0, min(x0 + w - 1, px + rr.choice((-1, 0, 1))))
+                py = max(y0, min(y0 + h - 1, py + rr.choice((-1, 1))))
+        if face != 'front':
+            for _ in range(2):
+                _blob(img, x0 + rr.uniform(2, w - 2), y0 + rr.uniform(2, h - 2), 0.5 * k + 0.3, SLIME, rr, hi=SLIME[4])
+    x0, y0, w, h = head['front']
+    for y in range(h):
+        for x in range(w):
+            u, v = (x + 0.5) / w, (y + 0.5) / h
+            e = ell(u, v, 0.5, 0.46, 0.33, 0.27)
+            if e < 1:
+                c = SLIME[3] if e < 0.8 else SLIME[1]
+                ir = ell(u, v, 0.5, 0.46, 0.15, 0.22)
+                if ir < 1:
+                    c = (0x8A, 0x1A, 0x16, 255) if ir > 0.45 else (0xC8, 0x40, 0x2A, 255)
+                if abs(u - 0.5) < 0.045 and ir < 1:
+                    c = (0x0A, 0x04, 0x06, 255)              # 세로로 찢어진 동공
+                put(img, x0 + x, y0 + y, c)
+            elif e < 1.35:
+                put(img, x0 + x, y0 + y, PARA_VEIN[2] if e < 1.15 else PARA[1])
+
+
+def strand_paint(thick):
+    """줄 막대(길이 방향 = 텍스처 세로): 굵은 핏줄은 검붉은 살에 밝은 결과 마디, 가는 줄은 반짝이는 점액에 방울."""
+    def painter(img, faces, seed):
+        rr = random.Random(seed)
+        for face, (x0, y0, w, h) in faces.items():
+            for y in range(h):
+                for x in range(w):
+                    if thick:
+                        c = pick(PARA, 0.25 + 0.35 * (x / max(1, w - 1)) + rr.uniform(-0.06, 0.06), x, y)
+                        if (y // 2) % 5 == 0:
+                            c = PARA[4]                        # 마디(맥박이 지나가는 굵은 매듭)
+                    else:
+                        c = pick(SLIME, 0.35 + 0.3 * (x / max(1, w - 1)) + rr.uniform(-0.08, 0.08), x, y)
+                        if rr.random() < 0.12:
+                            c = SLIME[4]
+                    put(img, x0 + x, y0 + y, c)
+    return painter
+
+
+def spine_paint(img, faces, seed):
+    """껍데기 틈의 뼈 가시(살 뿌리는 따로 붙인 큐브): 누런 뼈빛, 면마다 위쪽이 밝다."""
+    rr = random.Random(seed)
+    for face, (x0, y0, w, h) in faces.items():
+        for y in range(h):
+            for x in range(w):
+                t = 0.45 + (0.3 if face == 'up' else -0.2 if face == 'down' else 0.1 - 0.2 * y / max(1, h)) + rr.uniform(-0.1, 0.1)
+                put(img, x0 + x, y0 + y, pick(SPINE, t, x, y))
+
+
+def slime_paint(img, faces, seed):
+    rr = random.Random(seed)
+    for face, (x0, y0, w, h) in faces.items():
+        for y in range(h):
+            for x in range(w):
+                put(img, x0 + x, y0 + y, pick(SLIME, 0.3 + 0.5 * y / max(1, h) + rr.uniform(-0.1, 0.1), x, y))
+
+
+def root_paint(img, faces, seed):
+    rr = random.Random(seed)
+    for face, (x0, y0, w, h) in faces.items():
+        for y in range(h):
+            for x in range(w):
+                put(img, x0 + x, y0 + y, pick(PARA, 0.55 - 0.35 * x / max(1, w) + rr.uniform(-0.08, 0.08), x, y))
+
+
+def shulker_tethers():
+    return {name: {'to': 'lid', 'at': [sx, -4.0, sz], 'len': STRAND_LEN, 'r0': 2.4} for name, sx, sz, _ in SHULKER_STRANDS}
+
+
+def shulker_open_pose(peek=0.85):
+    """바닐라 ShulkerModel 식 그대로: 뚜껑 높이 16 + sin(f)·8, f = (0.5 + peek)π; peek > 0.3 이면 뚜껑이 (sin f - 1)⁴·π/8 돈다."""
+    f = (0.5 + peek) * math.pi
+    ry = (-1 + math.sin(f)) ** 4 * math.pi * 0.125 if peek > 0.3 else 0.0
+    return {'lid': (0, 16 + math.sin(f) * 8 - 24, 0, 0, math.degrees(ry), 0)}
 
 
 def shulker():
-    """셜커: 3차 그대로(1배)에 속(열리면 보이는 속살·좀비 머리)을 그린다. 2배로 칠하면 지의류 무늬가 잘게 부서져 3차가 더 낫다."""
-    d = _shulker3()
-    d['hires'] = 1
-    base = d['base']
-    d['base'] = lambda img, data: (base(img, data), shulker_inner(img, data))
-    d['inner_pose'] = {'lid': (0, -9, 0, 0, 22.5, 0)}
-    d['inner_view_pitch'] = 30
-    d['concept'] = d['concept'].replace('중력 셜커', '가시 셜커') + ' · 뚜껑이 열리면 썩은 속살과 고름, 좀비처럼 썩은 머리'
-    d['tell'] = '가시 껍데기: 닫혀 있을 때 근접으로 치면 껍데기 틈의 뼈 가시에 찔린다'
-    return d
+    adds = []
+    for name, _sx, _sz, thick in SHULKER_STRANDS:
+        w = 1.5 if thick else 1.0
+        adds.append(A(name, [-w / 2, -STRAND_LEN, -w / 2], [w, STRAND_LEN, w], strand_paint(thick)))
+    # 껍데기 틈으로 삐져나온 뼈 가시: 닫혀 있어도 보이는 신호. 뚜껑 옆면 아래 가장자리(모델 y 20 = 아랫판 기준 -4)의
+    # 홈 양옆(바닐라 텍스처의 뚜껑 홈은 가운데 8칸)에서, 살 뿌리 위로 가시가 비스듬히 위로 솟는다
+    rr = random.Random(617)
+    for side in ('+x', '-x', '+z', '-z'):
+        for along in (-6.0, 6.0):
+            along += rr.uniform(-0.6, 0.6)
+            ln, ang = rr.uniform(2.8, 3.6), rr.uniform(22, 34)
+            sg = 1 if side[0] == '+' else -1
+            if side[1] == 'x':
+                root_o, piv = [sg * 8 - 0.8, -4.8, along - 0.8], [sg * 7.6, -4.0, along]
+                shaft_o, shaft_s = ([7.6, -4.5, along - 0.5] if sg > 0 else [-7.6 - ln, -4.5, along - 0.5]), [ln, 1.0, 1.0]
+                rot = ('z', -ang * sg, piv)
+            else:
+                root_o, piv = [along - 0.8, -4.8, sg * 8 - 0.8], [along, -4.0, sg * 7.6]
+                shaft_o, shaft_s = ([along - 0.5, -4.5, 7.6] if sg > 0 else [along - 0.5, -4.5, -7.6 - ln]), [1.0, 1.0, ln]
+                rot = ('x', ang * sg, piv)
+            adds.append(A('base', root_o, [1.6, 1.6, 1.6], root_paint))
+            adds.append(A('base', shaft_o, shaft_s, spine_paint, rot=rot))
+    # 아랫판 위로 퍼진 뿌리(입체) 세 가닥과 뚜껑 아랫면에 매달린 점액 방울
+    for ang in (20, 150, 260):
+        adds.append(A('base', [2.6, -8.8, -0.5], [4.2, 0.8, 1.0], root_paint, rot=('y', ang, [0.0, -8.4, 0.0])))
+    for x, z in ((3.0, 4.0), (-5.6, 0.6), (0.4, -3.4)):
+        adds.append(A('lid', [x - 0.5, -4.0, z - 0.5], [1.0, 1.4, 1.0], slime_paint))
+    return dict(
+        method='E', layer='minecraft:shulker#main', texture='shulker/shulker.png', tone=None, base=shulker_parasite,
+        extra_bones=[dict(name=n, parent='root', pivot=list(SHULKER_CORE)) for n, *_ in SHULKER_STRANDS],
+        tethers=shulker_tethers(), inner_pose=shulker_open_pose(0.85), inner_view_pitch=34, view=(-35, 22),
+        concept='기생 셜커: 보라 껍데기는 그대로, 속의 셜커를 기생체가 먹어 치웠다 · 핵에서 뻗은 핏줄·점액 줄이 뚜껑 안쪽에 붙어 열릴 때 늘어나고 꼬인다',
+        tell='가시 껍데기: 껍데기 틈으로 삐져나온 뼈 가시 — 닫혀 있을 때 근접으로 치면 찔린다',
+        adds=adds)
 
 
 DESIGNS['shulker'] = shulker

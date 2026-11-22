@@ -9,7 +9,10 @@ import net.minecraft.world.entity.Mob
 import net.minecraft.world.entity.monster.Creeper
 import net.minecraft.world.entity.monster.Enderman
 import net.minecraft.world.entity.monster.Phantom
+import net.minecraft.world.entity.monster.Shulker
 import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob
+import org.joml.Quaternionf
+import org.joml.Vector3f
 import java.util.WeakHashMap
 import kotlin.math.PI
 import kotlin.math.abs
@@ -68,11 +71,14 @@ object RigSystem {
         val age = m.tickCount.toFloat()
         animate(m, p, age)
         if (m.deathTime > 0) {
+            // LivingEntityRenderer: 몸 방향 다음, 몹별 추가 회전(팬텀 기울기·셜커 붙은 면)보다 먼저 쓰러진다
             val f = min(1f, sqrt(max(0f, (m.deathTime - 1f) / 20f * 1.6f)))
-            p.root.rotateZ(Math.toRadians(f * 90.0).toFloat())
+            p.root.premul(Quaternionf().rotationZ(Math.toRadians(f * 90.0).toFloat()))
         }
         s.rig.tint(m.hurtTime > 0 || m.deathTime > 0)
-        s.rig.apply(m.position(), m.yBodyRot, p)
+        // ShulkerRenderer 는 몸 방향에 180 을 더해 넘긴다. 셜커의 몸 방향은 클라이언트에서 늘 0 이다
+        // (생성 패킷에서 0 으로 두고 몸 회전 제어가 아무것도 하지 않는다) → 서버 값이 아니라 0 + 180
+        s.rig.apply(m.position(), if (m is Shulker) 180f else m.yBodyRot, p)
     }
 
     // ------------------------------------------------------------------ 몹별 동작(바닐라 식)
@@ -160,6 +166,7 @@ object RigSystem {
                 p.r("left_leg").x += a; p.r("right_leg").x -= a
                 p.r("right_arm").x += a * 0.6f; p.r("left_arm").x -= a * 0.6f
             }
+            "shulker" -> shulker(m as Shulker, p, age)
             "ravager" -> {
                 headLook(m, p)
                 val f = 0.4f * spd
@@ -170,6 +177,28 @@ object RigSystem {
                 if (m.isAggressive) p.r("mouth").x += 0.35f + 0.1f * sin(age * 0.6f)
             }
         }
+    }
+
+    /**
+     * 셜커(기생 셜커): ShulkerModel 식 그대로 뚜껑이 열린 만큼 들리고(16 + sin f · 8, 반 넘게 열리면 위아래로 출렁),
+     * 30% 넘게 열리면 (sin f - 1)⁴ · π/8 만큼 돈다. 기생체 줄(strand*)은 리그의 줄 뼈대 처리가 뚜껑 아랫면 점을 따라가게 한다.
+     * 붙은 면: ShulkerRenderer 가 몸 방향 다음에 (0, 0.5, 0) 을 중심으로 붙은 면 반대 방향 회전을 한다 →
+     * 루트 회전 R, 띄움 = R⁻¹c - c (c = (0, 0.5, 0)) 이면 Q · R · (v + 띄움) = Q · (R v + c - R c).
+     */
+    private fun shulker(sh: Shulker, p: Pose, age: Float) {
+        val peek = sh.getClientPeekAmount(1f)
+        val f = (0.5f + peek) * FLAT
+        val f1 = -1f + sin(f)
+        val bob = if (f > FLAT) sin(age * 0.1f) * 0.7f else 0f
+        p.o("lid").y += 16f + sin(f) * 8f + bob - 24f
+        p.r("lid").y = if (peek > 0.3f) f1 * f1 * f1 * f1 * FLAT * 0.125f else 0f
+        val head = p.r("head")
+        head.x = Math.toRadians(sh.xRot.toDouble()).toFloat()
+        head.y = Math.toRadians((sh.yHeadRot - 180f).toDouble()).toFloat()   // 클라이언트 몸 방향 0
+        val face = sh.attachFace.opposite.rotation
+        p.root.set(face)
+        val c = Vector3f(0f, 0.5f, 0f)
+        p.lift.set(Quaternionf(face).conjugate().transform(Vector3f(c)).sub(c))
     }
 
     /** 블레이즈 막대처럼 뼈대 위치를 절대값(픽셀)으로. */

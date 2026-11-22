@@ -277,6 +277,8 @@ def make(models, jar, name, zombified, preview_pose=True):
             painter(atlas, faces, 1000 + 97 * k)
         m.textures['parts'] = atlas
         m.parts_uv = S
+    if d.get('tethers'):
+        apply_tethers(m, d['tethers'])
     if preview_pose:
         # 미리보기에서는 평소 숨어 있는 뼈대(집중 때만 펼치는 날개 등)를 감춘다
         for b in d.get('hidden_bones', []):
@@ -378,12 +380,32 @@ TITLE = {
     'breeze': '녹슨 바람(브리즈)', 'ghast': '혼불 가스트', 'blaze': '잿불 블레이즈', 'skeleton': '묘지 해골',
     'stray': '동상 해골(스트레이)', 'bogged': '포자 해골(보그드)', 'wither_skeleton': '진홍 해골(위더 스켈레톤)',
     'piglin_brute': '진홍 브루트', 'pillager': '소음 약탈자', 'vindicator': '도끼잡이(변명자)', 'evoker': '강령 소환사',
-    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '가시 셜커', 'ravager': '썩은 파괴수',
+    'illusioner': '거울 환술사', 'witch': '역병 마녀', 'shulker': '기생 셜커', 'ravager': '썩은 파괴수',
 }
 METHOD = {'E': '리그', 'B': '장비 덧씌움 + 머리 아이템 (몸 텍스처는 바닐라)', 'C': '머리 아이템 (몸 텍스처는 바닐라)', 'D': '색 변형 텍스처'}
 
 
-def inner_posed(m, pose):
+def apply_tethers(m, tethers):
+    """줄 뼈대(셜커 기생체 줄): 피벗에서 '줄 끝'(다른 뼈대 기준 점)을 향해 길이 len 막대(-y 방향)를 돌리고 늘린다.
+    서버 리그(RigInstance 의 tethers)와 같은 식. 회전은 ZYX 오일러(x = asin(-u.z), z = atan2(u.x, -u.y)).
+    줄은 피벗에서 r0 만큼 나간 곳(핵 겉면)에서 시작한다. 원래 피벗은 _pivot0 에 남긴다(리그 정의에는 그 값을 쓴다)."""
+    import numpy as np
+    for name, t in tethers.items():
+        p = m.root.find(name)
+        if not hasattr(p, '_pivot0'):
+            p._pivot0 = p.offset.copy()
+        tgt = m.root.find(t['to']).world() @ np.array(list(t['at']) + [1.0])
+        org = p.parent.world() @ np.array(list(p._pivot0) + [1.0])
+        dv = (tgt - org)[:3]
+        L = float(np.linalg.norm(dv)) or 0.01
+        u = dv / L
+        r0 = min(t.get('r0', 0.0), L * 0.5)
+        p.offset = p._pivot0 + u * r0
+        p.rot = np.array([math.asin(max(-1.0, min(1.0, -u[2]))), 0.0, math.atan2(u[0], -u[1])])
+        p.scale = np.array([1.0, (L - r0) / t['len'], 1.0])
+
+
+def inner_posed(m, pose, tethers=None):
     """속을 보여 주는 자세(셜커 뚜껑을 들어 올림, 마그마 큐브 층이 벌어짐): {뼈대: (dx, dy, dz, rx, ry, rz 도)}."""
     import copy as _c
     mm = _c.copy(m)
@@ -392,6 +414,8 @@ def inner_posed(m, pose):
         p = mm.root.find(bone)
         p.offset = p.offset + [dx, dy, dz]
         p.rot = p.rot + [math.radians(rx), math.radians(ry), math.radians(rz)]
+    if tethers:
+        apply_tethers(mm, tethers)
     return mm
 
 
@@ -408,7 +432,7 @@ def preview_sheet(models, jar, names, out_path, cell=300):
         yaw, pitch = d.get('view', (-35, 22))
         tiles = [render(o, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw, pitch=pitch), render(z, size=cell, yaw=yaw + 180, pitch=pitch)]
         if d.get('inner_pose'):
-            tiles.append(render(inner_posed(z, d['inner_pose']), size=cell, yaw=yaw, pitch=d.get('inner_view_pitch', pitch)))
+            tiles.append(render(inner_posed(z, d['inner_pose'], d.get('tethers')), size=cell, yaw=yaw, pitch=d.get('inner_view_pitch', pitch)))
         for i, t in enumerate(tiles):
             sheet.alpha_composite(t, (i * cell, y + 34))
         hires = '  ·  텍스처 2배' if d.get('hires', 1) > 1 else ''

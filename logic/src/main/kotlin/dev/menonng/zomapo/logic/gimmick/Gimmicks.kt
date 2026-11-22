@@ -63,7 +63,7 @@ enum class Gimmick(val mob: String, val title: String, val skill: String, val in
     GUARDIAN("guardian", "익사체 지휘관", "지휘 광선 · 프리즈머린 몸", null),
     ELDER_GUARDIAN("elder_guardian", "썩은 장로", "썩은 저주 · 익사체 부르기 · 프리즈머린 몸", Interval.seconds(40.0, 80.0)),
     BREEZE("breeze", "녹슨 바람", "흡입 돌풍", null),
-    SHULKER("shulker", "가시 셜커", "가시 껍데기", null),
+    SHULKER("shulker", "기생 셜커", "가시 껍데기", null),
     GHAST("ghast", "혼불 가스트", "울부짖음 · 터지는 위", null),
     BLAZE("blaze", "잿불 블레이즈", "꺼져 가는 불 · 재 구름", null),
     PIGLIN_BRUTE("piglin_brute", "진홍 브루트", "광폭 · 찢는 도끼", null),
@@ -212,7 +212,7 @@ object GimmickRules {
     const val SUCTION_EVERY = 3
     const val SUCTION_RADIUS = 3.0
 
-    // 가시 셜커(2026-11-22 개정, 중력 교란은 대처가 어려워 뺐다): 닫혀 있을 때 근접으로 치면 가시 피해 2 를 돌려받는다.
+    // 기생 셜커의 가시 껍데기(2026-11-22 확정, 중력 교란은 대처가 어려워 뺐다): 닫혀 있을 때 근접으로 치면 가시 피해 2 를 돌려받는다.
     // 열려 있을 때 치거나 활·삼지창으로 치면 없다. 탄환은 바닐라 그대로(방패·쏘아 맞히기로 막는다)
     const val SHELL_THORNS = 2.0f
 
