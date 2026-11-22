@@ -33,6 +33,18 @@ object ZomCommands {
                     .then(give())
                     .then(motion())
                     .then(infection())
+                    .then(Commands.literal("bloodmoon")
+                        .executes { ctx -> ctx.source.sendSuccess({ Component.literal(dev.menonng.zomapo.gimmick.BloodMoonSystem.info()) }, false); 1 }
+                        .then(Commands.literal("start").executes { ctx ->
+                            val s = ctx.source.server
+                            val nations = dev.menonng.zomapo.infection.NationBridge.nations().map { it.id }
+                            val ok = dev.menonng.zomapo.gimmick.BloodMoonSystem.schedule(s, nations, 0)
+                            ctx.source.sendSuccess({ Component.literal(if (ok) "블러드문을 바로 시작합니다." else "블러드문을 시작할 수 없습니다(진행 중이거나 국가 코어가 없음).") }, true); 1
+                        })
+                        .then(Commands.literal("stop").executes { ctx ->
+                            val ok = dev.menonng.zomapo.gimmick.BloodMoonSystem.stop(ctx.source.server)
+                            ctx.source.sendSuccess({ Component.literal(if (ok) "블러드문을 끝냈습니다." else "진행 중인 블러드문이 없습니다.") }, true); 1
+                        }))
                     .then(Commands.literal("horde").executes { ctx ->
                         val p = ctx.source.playerOrException
                         val lv = dev.menonng.zomapo.infection.Infection.displayLevel(p.level(), p.x, p.z)
