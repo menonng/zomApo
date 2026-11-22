@@ -62,9 +62,19 @@ class InfectionModelTest {
     @DisplayName("영역별 레벨")
     fun case07() {
         val ramp = 1.5
-        assertEquals(1.8, model.areaLevel(Zone.WILDERNESS, ramp), eps)
-        assertEquals(0.7 * 3.0 + 0.3 * 1.8, model.areaLevel(Zone.BORDER, ramp, ownTerritory = 3.0), eps)
-        assertEquals(2.8, model.areaLevel(Zone.LANDMARK, ramp), eps)
+        assertEquals(1.5, model.areaLevel(Zone.WILDERNESS, ramp), eps)                         // 서버가 조용하면 야생 = G
+        val world = NationActivity(20 * 128.0, 20, 0.0)                                           // 서버 전체 1인당 128
+        val wild = model.wildernessLevel(ramp, world)
+        assertEquals(ramp + 0.8 * 1.6 * Math.log(3.0), wild, eps)
+        // 영토 밖은 영토 레벨에서 야생 기준으로 서서히: 0청크 = 영토, 8청크 = 1/e 만큼 남음, 아주 멀면 야생
+        assertEquals(4.0, model.areaLevel(Zone.BORDER, ramp, ownTerritory = 4.0, surrounding = wild, distanceChunks = 0.0), eps)
+        assertEquals(wild + (4.0 - wild) / Math.E, model.areaLevel(Zone.BORDER, ramp, ownTerritory = 4.0, surrounding = wild, distanceChunks = 8.0), eps)
+        assertTrue(model.areaLevel(Zone.BORDER, ramp, ownTerritory = 4.0, surrounding = wild, distanceChunks = 60.0) - wild < 0.01)
+        // 탐험 보너스: 가장 큰 하나, 상한 1.0, 128블록에서 0
+        assertEquals(1.0, model.explorerBonus(listOf(10_000.0 to 10.0, 100.0 to 0.0)), eps)
+        assertEquals(0.0, model.explorerBonus(listOf(10_000.0 to 128.0)), eps)
+        assertEquals(Math.log(2.0) * 0.5, model.explorerBonus(listOf(1_500.0 to 80.0)), eps)
+        assertEquals(2.5, model.areaLevel(Zone.LANDMARK, ramp), eps)
         assertEquals(3.0, model.areaLevel(Zone.NEST, ramp), eps)
         assertEquals(0.0, model.areaLevel(Zone.CAMP, ramp), eps)
         assertEquals(3.0, model.areaLevel(Zone.END, 5.0), eps)

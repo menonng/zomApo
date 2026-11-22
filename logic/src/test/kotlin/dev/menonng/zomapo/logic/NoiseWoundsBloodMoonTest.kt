@@ -133,19 +133,23 @@ class BloodMoonAndAfkTest {
 
 class BloodMoonTargetTest {
     @org.junit.jupiter.api.Test
-    @org.junit.jupiter.api.DisplayName("블러드문 습격 지점: 수도 셋이 후보면 캠프 약 40%, 수도 각 약 20%. 지킬 사람 없는 수도는 빠지고, 아무도 없으면 캠프")
+    @org.junit.jupiter.api.DisplayName("블러드문은 세 수도에 동시에. 강제 발동은 지킬 사람 없는 나라를 건너뛰고, 참가·방어선·정화는 나라마다")
     fun case01() {
-        val r = kotlin.random.Random(3)
-        val caps = listOf("n1", "n2", "n3")
-        val n = 50_000
-        val count = HashMap<String, Int>()
-        repeat(n) { val t = BloodMoon.pickTarget(r, caps); count[t] = (count[t] ?: 0) + 1 }
-        assertEquals(0.4, count[BloodMoon.CAMP]!! / n.toDouble(), 0.01)
-        for (c in caps) assertEquals(0.2, count[c]!! / n.toDouble(), 0.01)
-        assertEquals(BloodMoon.CAMP, BloodMoon.pickTarget(r, emptyList()))
+        val active = linkedMapOf("n1" to 3, "n2" to 2, "n3" to 0)
+        assertEquals(listOf("n1", "n2", "n3"), BloodMoon.targets(BloodMoon.Decision.START, active))
+        assertEquals(listOf("n1", "n2"), BloodMoon.targets(BloodMoon.Decision.FORCE, active))
+        assertTrue(BloodMoon.targets(BloodMoon.Decision.WAIT, active).isEmpty())
+        assertTrue(BloodMoon.countsFor("n1", "n1", emptySet()))
+        assertTrue(BloodMoon.countsFor("n2", "n1", setOf("n2")))
+        assertFalse(BloodMoon.countsFor("n3", "n1", setOf("n2")))
+        assertEquals("n2", BloodMoon.homeCapital(linkedMapOf("n1" to 100, "n2" to 900)))
+        assertEquals(null, BloodMoon.homeCapital(emptyMap()))
+        assertEquals(18, BloodMoon.defenseLineLeft(82)); assertEquals(0, BloodMoon.defenseLineLeft(140))
         assertTrue(BloodMoon.waveHeld(1, 1))
         assertTrue(!BloodMoon.waveHeld(0, 80))
-        assertTrue(!BloodMoon.waveHeld(4, 0))
+        assertTrue(!BloodMoon.waveHeld(4, BloodMoon.defenseLineLeft(100)))
+        assertEquals(0.1, BloodMoon.globalPurify(mapOf("n1" to true, "n2" to true)), 1e-9)
+        assertEquals(0.0, BloodMoon.globalPurify(mapOf("n1" to true, "n2" to false)), 1e-9)
         assertEquals(2, BloodMoon.spawnLevel(0))
         assertEquals(4, BloodMoon.spawnLevel(4))
     }

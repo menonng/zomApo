@@ -18,8 +18,12 @@ data class InfectionConfig(
     val heatDivisor: Double = 64.0,    // 처치 수 40 × 처치당 평균 기본 점수 약 1.6
     val purifyCoefficient: Double = 0.18,
     val purifyCap: Double = 1.0,
-    val wildernessBonus: Double = 0.3,
-    val borderOwnWeight: Double = 0.7,
+    val wildWorldFactor: Double = 0.8,      // 야생 기준 = G + 0.8 × k × 서버 전체 열기(2026-11-22)
+    val falloffChunks: Double = 8.0,        // 영토에서 멀어질수록 e^(−거리/8청크)로 야생 기준에 가까워진다(경비지대·접경 4청크 대신)
+    val explorerCap: Double = 1.0,          // 탐험 보너스 상한(네더 1.5 보다 낮게)
+    val explorerScoreDivisor: Double = 1_500.0,
+    val explorerNear: Double = 32.0,        // 이 안은 보너스 그대로
+    val explorerFar: Double = 128.0,        // 여기서 0
     val landmarkBonus: Double = 1.0,
     val nestMinimum: Double = 3.0,
     val endFixed: Double = 3.0,       // 엔드 = 3 고정(셜커·엔더맨 좀비화). 떼·낮 스폰은 오버월드만
@@ -63,17 +67,32 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
     fun territoryLevel(ramp: Double, activity: NationActivity, eventPurify: Double = 0.0): Double =
         clamp(ramp + config.heatK * heat(activity) - purify(activity, eventPurify))
 
-    fun wildernessLevel(ramp: Double): Double = clamp(ramp + config.wildernessBonus)
+    /** 야생 기준: 서버 전체 최근 7일 기본 스코어 ÷ 서버 전체 활동 인원으로 같은 식의 열기를 내고 0.8 배. */
+    fun wildernessLevel(ramp: Double, world: NationActivity = NationActivity(0.0, 1, 0.0)): Double =
+        clamp(ramp + config.wildWorldFactor * config.heatK * heat(world))
+
+    /** 영토 밖: 가장 가까운 영토에서 [distanceChunks] 떨어진 청크. 영토 레벨에서 야생 기준으로 서서히(등고선처럼) 바뀐다. 여러 국가면 큰 값. */
+    fun falloffLevel(wild: Double, territory: Double, distanceChunks: Double): Double =
+        clamp(wild + (territory - wild) * exp(-max(0.0, distanceChunks) / config.falloffChunks))
 
     /**
-     * 영역 레벨. [ownTerritory] 는 그 청크를 소유했거나 접경으로 둔 국가의 영토 레벨,
-     * [surrounding] 은 거점·둥지처럼 주변 레벨에 더하는 경우의 기준값이다.
+     * 탐험 보너스(영토 밖에만 더한다, 네더 3-6 과 같은 모양): 반경 128블록 안 플레이어마다
+     * min(상한 1.0, ln(1 + 좀비 스코어 / 1,500)) × 거리 감쇠(32블록 안 1, 128블록 0), 그중 가장 큰 값 하나.
      */
-    fun areaLevel(zone: Zone, ramp: Double, ownTerritory: Double = 0.0, surrounding: Double = wildernessLevel(ramp)): Double =
+    fun explorerBonus(players: Collection<Pair<Double, Double>>): Double = players.maxOfOrNull { (score, dist) ->
+        val fall = ((config.explorerFar - dist) / (config.explorerFar - config.explorerNear)).coerceIn(0.0, 1.0)
+        min(config.explorerCap, ln(1.0 + max(0.0, score) / config.explorerScoreDivisor)) * fall
+    } ?: 0.0
+
+    /**
+     * 영역 레벨. [ownTerritory] 는 그 청크를 소유한(또는 가장 가까운) 국가의 영토 레벨, [distanceChunks] 는 영토에서의 거리,
+     * [surrounding] 은 거점·둥지처럼 주변 레벨에 더하는 경우의 기준값이다. BORDER = 영토 밖(거리 감쇠), WILDERNESS = 영토에서 아주 먼 곳.
+     */
+    fun areaLevel(zone: Zone, ramp: Double, ownTerritory: Double = 0.0, surrounding: Double = wildernessLevel(ramp), distanceChunks: Double = 0.0): Double =
         when (zone) {
             Zone.TERRITORY -> clamp(ownTerritory)
-            Zone.BORDER -> clamp(config.borderOwnWeight * ownTerritory + (1.0 - config.borderOwnWeight) * wildernessLevel(ramp))
-            Zone.WILDERNESS -> wildernessLevel(ramp)
+            Zone.BORDER -> falloffLevel(surrounding, ownTerritory, distanceChunks)
+            Zone.WILDERNESS -> clamp(surrounding)
             Zone.LANDMARK -> clamp(surrounding + config.landmarkBonus)
             Zone.NEST -> clamp(max(config.nestMinimum, surrounding))
             Zone.CAMP -> 0.0
@@ -81,7 +100,7 @@ class InfectionModel(val config: InfectionConfig = InfectionConfig()) {
             Zone.END -> config.endFixed
         }
 
-    /** 두 국가의 접경이 겹치면 큰 값을 쓴다. */
+    /** 두 국가의 거리 감쇠가 겹치면 큰 값을 쓴다. */
     fun overlappingBorder(levels: Collection<Double>): Double = levels.maxOrNull() ?: 0.0
 
 }

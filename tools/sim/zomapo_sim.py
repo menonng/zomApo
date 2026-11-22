@@ -33,6 +33,8 @@ Z_MAX = 5.0
 TERRITORY_SHARE = 0.6                        # 접속 시간 중 자국 영토·접경에 머무는 비율
 FUN_NEUTRAL = 4.6                            # 이보다 재미있으면 다음 접속 의욕이 오르고, 낮으면 내려간다
 WINDOW = 3                                   # 정화(함께 있던 시간) 창(현실 일)
+WILD_FACTOR = 0.8
+EXPLORER_MEAN = 0.3                           # 탐험 보너스(상한 1.0)의 플레이 시간 평균 근사
 HEAT_WINDOW = 7                              # 국가 열기 창(현실 일). 2026-11-22: 72시간 → 최근 7일
 GAME_DAYS_PER_HOUR = 3.0                     # 게임 하루 = 현실 20분
 MOON_CYCLE = 8                               # 보름달 주기(게임 일)
@@ -220,7 +222,13 @@ def nation_levels(cfg: Config, players: list[Player], d: int):
             continue
         parts.append((raw, 0.0))
         zt.append(min(Z_MAX, max(0.0, cfg.k * raw)))
-    zwild = 0.0 if cfg.method in "ABCDE" else min(Z_MAX, global_ramp(d) + 0.3)
+    if cfg.method in "ABCDE":
+        zwild = 0.0
+    else:
+        # 2026-11-22: 야생 기준 = G + 0.8 × k × 서버 전체 열기(1인당), 탐험 보너스는 평균 +0.3 으로 근사
+        acts = sum(1 for p in players if p.recent(p.day_hours, d, HEAT_WINDOW) >= 1)
+        tot = sum(p.recent(p.day_base, d, HEAT_WINDOW) for p in players)
+        zwild = min(Z_MAX, global_ramp(d) + WILD_FACTOR * cfg.k * math.log1p(tot / max(1, acts) / SCORE_DIVISOR) + EXPLORER_MEAN)
     return zt, zwild, parts
 
 

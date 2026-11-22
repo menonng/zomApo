@@ -63,17 +63,17 @@ object LevelRules {
         if (oldMax <= 0.0) newMax else (current / oldMax * newMax).coerceIn(0.0, newMax)
 
     /**
-     * 레벨별 좀비 강화(제안안). 사용자 요구(레벨 2 무연소·낮 스폰, 레벨 4 체력 1.5배) 위에 더하는 것.
-     * docs/design/zombies.md '감염 레벨' 2-2.
+     * 레벨별 좀비 강화. 사용자 요구(레벨 2 무연소·낮 스폰, 레벨 4 체력 1.5배) 위에 더하는 것.
+     * docs/design/zombies.md '감염 레벨' 2절 표. 2026-11-22: 탐지 Lv1 +25% 부터, 문 부수기 Lv2 부터. 행동은 [ZombieAi].
      */
     fun buffs(spawnLevel: Int): ZombieBuffs = when (spawnLevel.coerceIn(0, MAX_LEVEL)) {
         0 -> ZombieBuffs()
-        1 -> ZombieBuffs(followRange = 1.1)
-        2 -> ZombieBuffs(followRange = 1.15, reinforcement = 1.5, armorChanceBonus = 0.05)
-        3 -> ZombieBuffs(followRange = 1.2, reinforcement = 2.0, armorChanceBonus = 0.10, breaksDoorsAnyDifficulty = true)
-        4 -> ZombieBuffs(followRange = 1.25, reinforcement = 2.0, armorChanceBonus = 0.15, breaksDoorsAnyDifficulty = true,
+        1 -> ZombieBuffs(followRange = 1.25)
+        2 -> ZombieBuffs(followRange = 1.3, reinforcement = 1.5, armorChanceBonus = 0.05, breaksDoorsAnyDifficulty = true)
+        3 -> ZombieBuffs(followRange = 1.35, reinforcement = 2.0, armorChanceBonus = 0.10, breaksDoorsAnyDifficulty = true)
+        4 -> ZombieBuffs(followRange = 1.4, reinforcement = 2.0, armorChanceBonus = 0.15, breaksDoorsAnyDifficulty = true,
             knockbackResistance = 0.1, picksUpItems = true)
-        else -> ZombieBuffs(followRange = 1.3, reinforcement = 2.5, armorChanceBonus = 0.20, breaksDoorsAnyDifficulty = true,
+        else -> ZombieBuffs(followRange = 1.45, reinforcement = 2.5, armorChanceBonus = 0.20, breaksDoorsAnyDifficulty = true,
             knockbackResistance = 0.2, picksUpItems = true, speed = 1.1, attack = 1.2)
     }
 }

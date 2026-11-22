@@ -128,11 +128,11 @@ zomApo/
 | 필요 | 방법 |
 |---|---|
 | 플레이어의 국가, 국가 목록, 영토 청크, 관계 | `snw-api` 의 `NationApi` 를 `compileOnly` 로 참조, 실행 시 `FabricLoader.isModLoaded("snw")` 확인 |
-| 영토 변경 알림(접경 BFS 재계산) | `NationApi.events().onClaimChanged` |
+| 영토 변경 알림(영토 거리 BFS 재계산) | `NationApi.events().onClaimChanged` |
 | `/info`·국민 목록에 좀비 통계 표시 | zomApo 가 `snw:stat_provider` 엔트리포인트로 `StatProvider` 구현을 등록 |
 | 망자 보호 시간의 자국민 판정 | `NationApi.sameNation(a, b)` |
 
-simpleNationWar 가 없으면: 모든 땅을 황야로 계산하고, 자국민 판정은 '본인만', 통계는 관리자 명령으로만 본다.
+simpleNationWar 가 없으면: 모든 땅을 영토 밖(야생 기준)으로 계산하고, 자국민 판정은 '본인만', 통계는 관리자 명령으로만 본다.
 
 ### 7. 테스트
 
