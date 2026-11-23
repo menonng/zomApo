@@ -9,6 +9,7 @@ import java.util.UUID
  */
 object NationBridge {
     data class NationInfo(val id: String, val name: String, val members: Set<UUID>, val claims: List<Triple<String, Int, Int>>, val core: CoreInfo?)
+    data class LandmarkInfo(val id: String, val dimension: String, val x: Int, val y: Int, val z: Int, val deep: Boolean)
     data class CoreInfo(val nation: String, val dimension: String, val x: Int, val y: Int, val z: Int, val hp: Double)
 
     val present: Boolean by lazy { FabricLoader.getInstance().isModLoaded("snw") }
@@ -25,6 +26,7 @@ object NationBridge {
     fun grantJoinProtection(player: UUID): Boolean = !present || runCatching { SnwLink.grantJoinProtection(player) }.getOrDefault(true)
     fun setScoreSource(f: (UUID) -> Double) { if (present) runCatching { SnwLink.setScoreSource(f) } }
     fun setLevelSource(f: (String, Int, Int) -> Int) { if (present) runCatching { SnwLink.setLevelSource(f) } }
+    fun landmarks(): List<LandmarkInfo> = if (present) runCatching { SnwLink.landmarks() }.getOrDefault(emptyList()) else emptyList()
     fun core(nation: String): CoreInfo? = if (present) runCatching { SnwLink.core(nation) }.getOrNull() else null
     fun publish(type: String, data: Map<String, Any?>) { if (present) runCatching { SnwLink.publish(type, data) } }
     fun subscribe(type: String, f: (Map<String, Any?>) -> Unit) { if (present) runCatching { SnwLink.subscribe(type, f) } }

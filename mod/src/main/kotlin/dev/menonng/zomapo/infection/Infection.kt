@@ -60,6 +60,9 @@ object Infection {
     @Volatile var wild = 0.0; private set
     @Volatile var nationLevels: Map<String, Double> = emptyMap(); private set
     @Volatile private var claims: Map<String, Map<String, List<IntArray>>> = emptyMap()   // 국가 → 차원 → 청크 목록
+    @Volatile private var landmarks: List<NationBridge.LandmarkInfo> = emptyList()
+    /** 거점 구역(감염 레벨 +1.0, 3-4): 중심 반경 32블록. */
+    const val LANDMARK_RADIUS = 32.0
     private val lastShown = HashMap<UUID, Int>()
     private var tick = 0
 
@@ -103,6 +106,7 @@ object Infection {
         val nations = NationBridge.nations()
         nationLevels = nations.associate { n -> n.id to model.territoryLevel(ramp, activity(n.members, n.id, now), eventPurify(n.id, now) - globalTemp) }
         claims = nations.associate { n -> n.id to n.claims.groupBy({ it.first }, { intArrayOf(it.second, it.third) }) }
+        landmarks = NationBridge.landmarks()
         dev.menonng.zomapo.ai.ZombieBrain.refreshCores()
     }
 
@@ -129,7 +133,8 @@ object Infection {
                 }
             }
         }
-        return areaEvents(d, cx, cz, model.clamp(raw))
+        val nearLandmark = landmarks.any { it.dimension == d && hypot(it.x - x, it.z - z) <= LANDMARK_RADIUS }
+        return areaEvents(d, cx, cz, model.clamp(if (nearLandmark) raw + model.config.landmarkBonus else raw))
     }
 
     /** 둥지 같은 지역 이벤트: 반경 안이면 정화(음수)·최소 레벨. */
@@ -222,6 +227,14 @@ object Infection {
                 s.allLevels.firstOrNull { it.dimension().identifier().toString() == dim }?.let { LevelRules.level(levelAt(it, cx * 16 + 8.0, cz * 16 + 8.0)) } ?: 0
             }
             // 시즌 시작 명령(snw)이 그날을 전역 램프 0일째로
+            // 거점 보상 상자(snw, 매일 06:00): 바이러스 결정(심층 거점은 더)
+            NationBridge.subscribe("landmark_chest") { d ->
+                val level = s.allLevels.firstOrNull { it.dimension().identifier().toString() == d["dimension"] } ?: return@subscribe
+                val pos = net.minecraft.core.BlockPos((d["x"] as Number).toInt(), (d["y"] as Number).toInt(), (d["z"] as Number).toInt())
+                val chest = level.getBlockEntity(pos) as? net.minecraft.world.level.block.entity.ChestBlockEntity ?: return@subscribe
+                val n = if (d["deep"] == true) 4 else 2
+                for (i in 0 until chest.containerSize) if (chest.getItem(i).isEmpty) { chest.setItem(i, dev.menonng.zomapo.item.ZomItems.virusCrystal(n)); break }
+            }
             NationBridge.subscribe("season_start") { d ->
                 (d["date"] as? String)?.let { runCatching { ZomConfig.setSeasonStart(LocalDate.parse(it)) } }
                 recompute(s)
