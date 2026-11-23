@@ -305,11 +305,10 @@ object BloodMoonSystem {
         save(s)
     }
 
+    /** 보물 인첸트 책(6-0-2): 수확자 또는 등불. */
     private fun treasureBook(p: ServerPlayer): ItemStack {
-        val reg = p.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
-        val keys = listOf(net.minecraft.world.item.enchantment.Enchantments.MENDING, net.minecraft.world.item.enchantment.Enchantments.SWIFT_SNEAK,
-            net.minecraft.world.item.enchantment.Enchantments.SOUL_SPEED, net.minecraft.world.item.enchantment.Enchantments.FROST_WALKER)
-        val e = reg.getOrThrow(keys.random())
+        val k = listOf(dev.menonng.zomapo.enchant.ZomEnchants.REAPER, dev.menonng.zomapo.enchant.ZomEnchants.LANTERN).random()
+        val e = dev.menonng.zomapo.enchant.ZomEnchants.holder(k) ?: return ItemStack(Items.BOOK)
         return net.minecraft.world.item.enchantment.EnchantmentHelper.createBook(net.minecraft.world.item.enchantment.EnchantmentInstance(e, 1))
     }
 

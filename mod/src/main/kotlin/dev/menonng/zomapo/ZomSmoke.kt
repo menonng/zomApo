@@ -142,6 +142,32 @@ internal object ZomSmoke {
         f += aiChecks(server)
         f += revenantChecks(server)
         f += nestChecks(server)
+        f += enchantChecks(server)
+        return f
+    }
+
+    /** 커스텀 인첸트 6종 등록, 정화 피해, 스타포스 데이터·설명. */
+    private fun enchantChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val ze = dev.menonng.zomapo.enchant.ZomEnchants
+        val keys = listOf(ze.PURIFY, ze.VACCINE, ze.REAPER, ze.BOND, ze.LANTERN, ze.SPRINT)
+        val missing = keys.filter { ze.holder(it) == null }
+        if (missing.isNotEmpty()) { f += "커스텀 인첸트 미등록: ${missing.map { it.identifier() }}"; return f }
+        val level = server.overworld()
+        val fake = net.fabricmc.fabric.api.entity.FakePlayer.get(level)
+        val sword = net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_SWORD)
+        sword.enchant(ze.holder(ze.PURIFY)!!, 5)
+        val held = fake.mainHandItem.copy()
+        fake.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, sword)
+        val z = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        val out = ze.modify(z, level.damageSources().playerAttack(fake), 6f)
+        if (Math.abs(out - 18.5f) > 0.01f) f += "정화 V 가 좀비에게 +12.5 가 아님: $out"
+        fake.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, held)
+        val sf = dev.menonng.zomapo.enchant.StarforceSystem
+        val axe = net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_AXE)
+        sf.setData(axe, dev.menonng.zomapo.enchant.StarforceSystem.Data(7, 0, 0.05))
+        if (sf.data(axe).star != 7) f += "스타포스 성 저장이 안 됨"
+        if (axe.get(net.minecraft.core.component.DataComponents.LORE)?.lines()?.firstOrNull()?.string?.startsWith("★★★★★★★☆☆☆") != true) f += "스타포스 별 설명이 없음"
         return f
     }
 

@@ -23,11 +23,17 @@ object ZomConfig {
     var seasonStart: java.time.LocalDate = java.time.LocalDate.of(2027, 1, 16)
         private set
 
+    /** 스타포스(player.md): 시즌 1 에서는 꺼 둔다(decisions 8-8). starforce.enabled=true 로 켠다. */
+    @Volatile
+    var starforceEnabled: Boolean = false
+        private set
+
     fun load() {
         val p = Properties()
         runCatching { if (Files.exists(path)) Files.newBufferedReader(path).use { p.load(it) } }
             .onFailure { ZomApo.log.warn("[zomApo] 설정을 읽지 못했습니다: {}", it.message) }
         motionIntensity = MotionRules.clampIntensity(p.getProperty("rig.motion_intensity")?.toDoubleOrNull() ?: MotionRules.DEFAULT_INTENSITY)
+        starforceEnabled = p.getProperty("starforce.enabled")?.trim()?.lowercase() == "true"
         seasonStart = p.getProperty("season.start")?.let { runCatching { java.time.LocalDate.parse(it.trim()) }.getOrNull() } ?: seasonStart
     }
 

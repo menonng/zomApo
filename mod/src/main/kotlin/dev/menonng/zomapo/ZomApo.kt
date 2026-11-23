@@ -20,6 +20,8 @@ object ZomApo : ModInitializer {
         Zombified.register()
         dev.menonng.zomapo.infection.Infection.register()
         dev.menonng.zomapo.stats.ZombieStats.register()
+        dev.menonng.zomapo.enchant.ZomEnchants.register()
+        dev.menonng.zomapo.enchant.StarforceSystem.register()
         dev.menonng.zomapo.ai.ZombieBrain.register()
         ServerLifecycleEvents.SERVER_STARTED.register { server ->
             if (System.getProperty("zomapo.smoke") == "true") {

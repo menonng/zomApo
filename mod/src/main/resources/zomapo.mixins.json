@@ -29,7 +29,8 @@
     "RevenantZombieMixin",
     "ShulkerInvoker",
     "WitherTickMixin",
-    "WoundHeartsMixin"
+    "WoundHeartsMixin",
+    "ZomDamageMixin"
   ],
   "injectors": {
     "defaultRequire": 1

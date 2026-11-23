@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "zomapo:purify",
+    "zomapo:vaccine",
+    "zomapo:bond",
+    "zomapo:sprint"
+  ]
+}
