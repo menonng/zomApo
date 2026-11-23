@@ -194,6 +194,7 @@ object RevenantSystem {
                 out.collapsed?.let { c -> list.firstOrNull { it.id == c.id }?.let { col -> list.remove(col); collapse(p, level, col) } }
                 list += EntryData(out.entry.id, out.entry.dimension, out.entry.x, out.entry.y, out.entry.z, now, now, items, xp)
                 spawnEntity(p, level, at, out.entry.id, items)
+                dev.menonng.zomapo.stats.ZombieStats.rec(p.uuid).revenantsCreated++
             }
         }
         p.setAttached(STASH, StashData(list, logic.nextId, logic.lastCountedRecoveryMillis))
@@ -252,7 +253,7 @@ object RevenantSystem {
         val cur = stash(p)
         val e = cur.entries.firstOrNull { it.id == id } ?: return
         val logic = toLogic(cur)
-        RevenantGuard.onRecovered(logic, id, System.currentTimeMillis())
+        if (RevenantGuard.onRecovered(logic, id, System.currentTimeMillis())) dev.menonng.zomapo.stats.ZombieStats.rec(p.uuid).revenantsRecovered++
         p.setAttached(STASH, StashData(cur.entries.filter { it.id != id }, logic.nextId, logic.lastCountedRecoveryMillis))
         dropItems(level, z.position(), e.items, e.xp, owner, preserved = false)
         p.sendSystemMessage(Component.literal("망자를 쓰러뜨려 소지품을 되찾았습니다. 1분 동안은 본인만 주울 수 있습니다.").withStyle(Style.EMPTY.withColor(RED)))

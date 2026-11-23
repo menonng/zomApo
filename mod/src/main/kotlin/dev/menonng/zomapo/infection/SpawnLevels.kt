@@ -205,6 +205,13 @@ object SpawnLevels {
         val decay = farm.record(killer.uuid, m.level().dimension().identifier().toString(), m.blockPosition().x, m.blockPosition().z, now)
         val ctx = KillContext(base, (spawnLevel(m) ?: 0).toDouble(), source(m), 1.0, environmentOnly = false)
         Infection.addKill(killer.uuid, ZombieScore.raw(ctx) * decay, ZombieScore.forHeat(ctx) * decay)
+        val form = when {
+            m.entityTags().contains("zomapo_alpha") -> "alpha"
+            m.getAttached(VariantTag.VARIANT) != null -> m.getAttached(VariantTag.VARIANT)!!.lowercase()
+            dev.menonng.zomapo.gimmick.Zombified.isZombified(m) -> "zombified_" + BuiltInRegistries.ENTITY_TYPE.getKey(m.type).path
+            else -> BuiltInRegistries.ENTITY_TYPE.getKey(m.type).path
+        }
+        dev.menonng.zomapo.stats.ZombieStats.onKill(killer.uuid, form, decay, ZombieScore.raw(ctx) * decay)
     }
 
     fun register() {

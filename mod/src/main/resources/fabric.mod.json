@@ -9,7 +9,8 @@
   "license": "All-Rights-Reserved",
   "environment": "server",
   "entrypoints": {
-    "main": [{ "adapter": "kotlin", "value": "dev.menonng.zomapo.ZomApo" }]
+    "main": [{ "adapter": "kotlin", "value": "dev.menonng.zomapo.ZomApo" }],
+    "snw:stat_provider": ["dev.menonng.zomapo.stats.ZomStatProvider"]
   },
   "mixins": ["zomapo.mixins.json"],
   "depends": {

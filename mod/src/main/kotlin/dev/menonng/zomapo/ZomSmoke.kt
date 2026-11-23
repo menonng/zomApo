@@ -132,6 +132,12 @@ internal object ZomSmoke {
         val before = inf.score(killer.uuid)
         z4.hurtServer(level, level.damageSources().playerAttack(killer), 1000f)
         if (inf.score(killer.uuid) <= before) f += "좀비 처치 점수가 오르지 않음"
+        if ((dev.menonng.zomapo.stats.ZombieStats.peek(killer.uuid)?.zombieKills ?: 0) < 1) f += "좀비 처치 수가 기록되지 않음"
+        if (bridge.present) {
+            val provs = net.fabricmc.loader.api.FabricLoader.getInstance().getEntrypoints("snw:stat_provider", dev.menonng.snw.api.StatProvider::class.java)
+            if (provs.none { it is dev.menonng.zomapo.stats.ZomStatProvider }) f += "snw 통계 제공자 엔트리포인트가 없음"
+            else if (provs.first { it is dev.menonng.zomapo.stats.ZomStatProvider }.lines(killer.uuid, null).none { it.label == "좀비 처치" }) f += "통계 제공자 줄에 좀비 처치가 없음"
+        }
         z4.discard()
         f += aiChecks(server)
         f += revenantChecks(server)

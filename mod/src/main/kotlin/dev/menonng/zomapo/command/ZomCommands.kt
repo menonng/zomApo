@@ -33,6 +33,11 @@ object ZomCommands {
                     .then(give())
                     .then(motion())
                     .then(infection())
+                    .then(Commands.literal("stats").then(Commands.argument("player", net.minecraft.commands.arguments.GameProfileArgument.gameProfile()).executes { ctx ->
+                        val prof = net.minecraft.commands.arguments.GameProfileArgument.getGameProfiles(ctx, "player").firstOrNull() ?: return@executes 0
+                        val lines = dev.menonng.zomapo.stats.ZomStatProvider().lines(prof.id(), null).joinToString("\n") { "${it.label} ${it.value}" }
+                        ctx.source.sendSuccess({ Component.literal("${prof.name()}\n$lines") }, false); 1
+                    }))
                     .then(Commands.literal("bloodmoon")
                         .executes { ctx -> ctx.source.sendSuccess({ Component.literal(dev.menonng.zomapo.gimmick.BloodMoonSystem.info()) }, false); 1 }
                         .then(Commands.literal("start").executes { ctx ->

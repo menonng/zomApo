@@ -266,6 +266,10 @@ object BloodMoonSystem {
         judge(s, r)
         val results = r.sites.associate { it.nation to (!it.failed && it.wavesHeld >= 3) }
         val now = System.currentTimeMillis()
+        for (site in r.sites) for ((id, _) in site.ticksIn) if (r.sites.maxByOrNull { it.ticksIn[id] ?: 0 } === site) {
+            val st = dev.menonng.zomapo.stats.ZombieStats.rec(id)
+            st.bloodMoonsJoined++; if (results[site.nation] == true) st.bloodMoonsWon++
+        }
         for (site in r.sites) {
             levelOf(s, site)?.let { l -> for (id in site.zombies) l.getEntity(id)?.discard() }
             site.bar.removeAllPlayers()
