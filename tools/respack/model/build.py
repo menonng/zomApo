@@ -28,6 +28,7 @@ import designs4  # noqa: E402
 from designs4 import DESIGNS  # noqa: E402
 from paint import box_faces  # noqa: E402
 
+DENSITY = 'mid'   # 2026-11-23 절충안: 바깥은 바닐라 밀도(2×2 묶음), 구멍 속·테두리만 2배(density.py). 'hires' 로 두면 예전 그대로
 HIRES = 2   # 4차: 모든 몹 텍스처 2배(모델 UV 1칸 = 텍스처 2픽셀). 디자인이 'hires': 1 이면 1배
 
 
@@ -190,6 +191,9 @@ def make(models, jar, name, zombified, preview_pose=True):
     """preview_pose=False: 미리보기용 자세(고개 기울임 등)를 빼고 바닐라 기본 자세로(리그 내보내기)."""
     designs4.JAR[0] = jar
     d = DESIGNS[name]()
+    import paint as _paint
+    mid = zombified and d.get('density', DENSITY) == 'mid'
+    _paint.LINE_GRID = 2 if mid and d.get('hires', HIRES) >= 2 else 1     # 바깥 선 무늬를 바닐라 밀도로(절충안)
     data = merged_data(models, d, zombified)
     tex = base_texture(jar, d, data, zombified)
     m = Model(name, data, tex)
@@ -238,7 +242,7 @@ def make(models, jar, name, zombified, preview_pose=True):
             # 구멍 둘레 벽: 비스듬히 봐도 껍질과 속 사이 틈으로 뒤가 비치지 않게, 찢긴 살의 두께가 보이게
             for o, sz in pocket_walls(shell, face, box, dep):
                 w = dict(origin=o, size=sz, grow=[0, 0, 0], mirror=False, uv=[0, 0], texScale=[1, 1], faces=[], tex='parts',
-                         added=True, tell=None, glow=False, uv_dims=uv_dims(sz))
+                         added=True, tell=None, glow=False, uv_dims=uv_dims(sz), wall=True)
                 part_.cubes.append(w)
                 jobs.append((w, L.get('wall_paint') or L['paint'], None))
     for a in d.get('adds', []):
@@ -254,6 +258,7 @@ def make(models, jar, name, zombified, preview_pose=True):
         jobs.append((c, a['paint'], cp))
     if jobs:
         ps = int(d.get('parts_scale', HIRES))  # 덧붙임 텍스처 배율
+        _paint.LINE_GRID = ps if mid and ps >= 2 else 1
         sizes = []
         for c, _, _ in jobs:
             w, h, dd = c['uv_dims']
@@ -275,6 +280,13 @@ def make(models, jar, name, zombified, preview_pose=True):
                     crop = face_crop(m, sc, f, simg).resize((r[2], r[3]), Image.NEAREST)
                     atlas.alpha_composite(crop, (r[0], r[1]))
             painter(atlas, faces, 1000 + 97 * k)
+            if c.get('wall'):
+                # 구멍 둘레 벽은 두께 0 판이라 앞뒤 면이 다 보인다. 한 면이라도 투명하면 껍질과 속 사이 빈틈으로 뒤가 비친다
+                for (fx, fy, fw, fh) in faces.values():
+                    for yy in range(fy, fy + fh):
+                        for xx in range(fx, fx + fw):
+                            if atlas.getpixel((xx, yy))[3] < 255:
+                                atlas.putpixel((xx, yy), (22, 7, 6, 255))
         m.textures['parts'] = atlas
         m.parts_uv = S
     if d.get('tethers'):
@@ -289,6 +301,13 @@ def make(models, jar, name, zombified, preview_pose=True):
     if d.get('overlay_fn2'):
         # 장비 레이어 텍스처를 바닐라 몸 텍스처(와 덧층)에서 옮겨 그린다(1차 해골, 브루트)
         m.textures['overlay'] = d['overlay_fn2'](m.textures['base'], m.textures.get('outer'))
+    if mid:
+        import density
+        density.apply(m, d, pocket_walls)
+    if zombified and d.get('layered'):
+        import density
+        density.check_layered(m, d, pocket_walls, lambda L: L.get('holes', {}))
+    _paint.LINE_GRID = 1
     return m, d
 
 

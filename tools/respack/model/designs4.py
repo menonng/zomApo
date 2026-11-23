@@ -25,7 +25,7 @@ import designs as D
 import designs3 as D3
 import rot as R
 from designs import A, bfaces, mat, chain
-from paint import Noise, ramp, stain, put, get, lum, mix, speckle, threads, pick
+from paint import Noise, ramp, stain, put, lput, get, lum, mix, speckle, threads, pick
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zombify_textures as zt  # noqa: E402  1차 텍스처 좀비화
@@ -75,6 +75,12 @@ def safe_of(size, face, dep):
 TORN = ramp('#1A0705', '#2E0C08', '#4A160F', '#6A2419', '#8C3A2A', '#AE5A44')
 
 
+def _in_box(hh, u, v, w, h):
+    u0, v0, u1, v1 = hh.box()
+    pu, pv = 0.5 / w, 0.5 / h          # 픽셀 반 칸 여유를 두고 안쪽만
+    return u0 + pu <= u <= u1 - pu and v0 + pv <= v <= v1 - pv
+
+
 def shell_paint(holes, rim=TORN, strands=0, extra=None):
     """살 껍질: 원종 면을 옮겨 온 그림(build 가 미리 붙여 둠)에 구멍을 뚫고 찢긴 가장자리를 칠한다."""
     def painter(img, faces, seed):
@@ -89,7 +95,8 @@ def shell_paint(holes, rim=TORN, strands=0, extra=None):
                 for x in range(w):
                     u, v = (x + 0.5) / w, (y + 0.5) / h
                     jit = (((x * 73856093) ^ (y * 19349663) ^ seed) % 1000) / 1000 * 0.24 - 0.12   # 가장자리 들쭉날쭉
-                    if any(hh.su <= u <= 1 - hh.su and hh.sv <= v <= 1 - hh.sv and hh.dist(u, v) <= 1 + jit for hh in hs):
+                    # 구멍은 둘레 벽 상자(box) 안에서만 뚫는다. 들쭉날쭉한 가장자리가 상자 밖으로 나가면 껍질과 속 사이 빈틈으로 뒤가 비친다
+                    if any(hh.su <= u <= 1 - hh.su and hh.sv <= v <= 1 - hh.sv and hh.dist(u, v) <= 1 + jit and _in_box(hh, u, v, w, h) for hh in hs):
                         hole.add((x, y))
             dist = {p: 0 for p in hole}
             frontier = list(hole)
@@ -168,7 +175,7 @@ def ell(u, v, cx, cy, rx, ry):
 
 def layer_spec(bone, size, dep, holes, tell=None, idx=0, strands=1, extra=None):
     """build.py 의 'layered' 항목: holes = {면: [Hole]}."""
-    return dict(bone=bone, idx=idx, depth=dep, tell=tell, paint=shell_paint(holes, strands=strands, extra=extra),
+    return dict(bone=bone, idx=idx, depth=dep, tell=tell, holes=holes, paint=shell_paint(holes, strands=strands, extra=extra),
                 walls=[(face, hh.box()) for face, hs in holes.items() for hh in hs], wall_paint=wall_paint())
 
 
@@ -329,7 +336,7 @@ def void_wing(img, faces, seed):
         for x in range(w):
             if rr.random() < 0.25:
                 vy = max(0, min(h - 1, vy + rr.choice((-1, 1))))
-            put(img, x0 + x, y0 + vy, VEIN[2 if x < w * 0.3 else 1 if x < w * 0.7 else 0])
+            lput(img, x0 + x, y0 + vy, VEIN[2 if x < w * 0.3 else 1 if x < w * 0.7 else 0])
         for x in range(w):   # 찢긴 아래 가장자리와 끝
             if rr.random() < 0.35 or x > w * 0.82 and rr.random() < 0.6:
                 put(img, x0 + x, y0 + h - 1, (0, 0, 0, 0))
@@ -1099,6 +1106,26 @@ def shulker_parasite(img, data):
                 put(img, x0 + x, y0 + y, c)
             elif e < 1.35:
                 put(img, x0 + x, y0 + y, PARA_VEIN[2] if e < 1.15 else PARA[1])
+    import paint as _paint
+    if _paint.LINE_GRID >= 2:
+        # 절충안(바닐라 밀도): 앞면 6×6칸에 손으로 찍은 눈. 점액 고리, 붉은 홍채, 세로로 찢어진 동공, 어두운 눈가
+        g = _paint.LINE_GRID
+        Y, y_, R_, r_, K, M = SLIME[3], SLIME[1], (0x8A, 0x1A, 0x16, 255), (0xC8, 0x40, 0x2A, 255), (0x0A, 0x04, 0x06, 255), PARA_VEIN[2]
+        EYE = ['.MMMM.',
+               'MyYYyM',
+               'MYrKRM',
+               'MYRKrM',
+               'MyYYyM',
+               '.MMMM.']
+        pal = {'Y': Y, 'y': y_, 'R': R_, 'r': r_, 'K': K, 'M': M}
+        cells = w // g
+        oy = 0 if cells <= 6 else (cells - 6) // 2
+        for j, row in enumerate(EYE):
+            for i, ch in enumerate(row):
+                if ch in pal:
+                    for dy in range(g):
+                        for dx in range(g):
+                            put(img, x0 + (oy + i) * g + dx, y0 + (oy + j) * g + dy, pal[ch])
 
 
 def strand_paint(thick):

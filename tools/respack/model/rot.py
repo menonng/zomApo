@@ -7,7 +7,8 @@ import colorsys
 import math
 import random
 
-from paint import Noise, get, lum, mix, pick, put, ramp
+import paint as _paint
+from paint import Noise, get, lum, mix, pick, put, lput, ramp
 
 # 어두움 → 밝음
 FLESH = ramp('#1C0806', '#38100C', '#5A1A14', '#7E2A22', '#A4433A', '#CC6E5C')
@@ -184,18 +185,18 @@ def scar(img, rect, pts, seed=0, dark=None, light=None, stitches=True):
             base = get(img, x, y)
             if base[3] == 0:
                 continue
-            put(img, x, y, dark)
+            lput(img, x, y, dark)
             lt = light or mix(base, (255, 245, 230, 255), 0.28)
             if abs(bx - ax) >= abs(by - ay):
-                put(img, x, y - 1, lt)
+                lput(img, x, y - _paint.LINE_GRID, lt)
                 if stitches and k % 3 == 0:
-                    put(img, x, y + 1, mix(base, dark, 0.6))
-                    put(img, x, y - 1, mix(base, dark, 0.6))
+                    lput(img, x, y + _paint.LINE_GRID, mix(base, dark, 0.6))
+                    lput(img, x, y - _paint.LINE_GRID, mix(base, dark, 0.6))
             else:
-                put(img, x - 1, y, lt)
+                lput(img, x - _paint.LINE_GRID, y, lt)
                 if stitches and k % 3 == 0:
-                    put(img, x + 1, y, mix(base, dark, 0.6))
-                    put(img, x - 1, y, mix(base, dark, 0.6))
+                    lput(img, x + _paint.LINE_GRID, y, mix(base, dark, 0.6))
+                    lput(img, x - _paint.LINE_GRID, y, mix(base, dark, 0.6))
             k += 1
 
 

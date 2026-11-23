@@ -73,6 +73,20 @@ def put(img, x, y, c):
             img.putpixel((x, y), c if len(c) == 4 else c + (255,))
 
 
+# 선(균열·실·흉터·핏줄)을 그릴 격자. 2 면 2×2 칸 하나를 한 점으로 그린다(픽셀 밀도 절충안: 바깥 무늬를 바닐라 밀도로).
+LINE_GRID = 1
+
+
+def lput(img, x, y, c):
+    g = LINE_GRID
+    if g <= 1:
+        return put(img, x, y, c)
+    bx, by = (int(x) // g) * g, (int(y) // g) * g
+    for j in range(g):
+        for i in range(g):
+            put(img, bx + i, by + j, c)
+
+
 def get(img, x, y):
     w, h = img.size
     if 0 <= x < w and 0 <= y < h:
@@ -171,18 +185,18 @@ def crack(img, rect, seed, length, dark, light=None, glow=None, start=None, head
             if not (x0 <= ix < x0 + w and y0 <= iy < y0 + h):
                 break
             if glow:
-                put(img, ix, iy, glow[-1] if r.random() < 0.55 else glow[-2])
+                lput(img, ix, iy, glow[-1] if r.random() < 0.55 else glow[-2])
                 for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
-                    px, py = ix + ox, iy + oy
+                    px, py = ix + ox * LINE_GRID, iy + oy * LINE_GRID
                     if x0 <= px < x0 + w and y0 <= py < y0 + h and get(img, px, py)[:3] not in [g[:3] for g in glow[-2:]]:
                         if r.random() < 0.55:
-                            put(img, px, py, glow[1] if r.random() < 0.6 else glow[2])
+                            lput(img, px, py, glow[1] if r.random() < 0.6 else glow[2])
             else:
-                put(img, ix, iy, dark[0] if r.random() < 0.6 else dark[1])
+                lput(img, ix, iy, dark[0] if r.random() < 0.6 else dark[1])
                 if light is not None:
-                    px, py = ix + (1 if math.sin(a) > 0 else 0), iy + (1 if math.cos(a) > 0 else 0)
-                    if (px, py) != (ix, iy) and x0 <= px < x0 + w and y0 <= py < y0 + h:
-                        put(img, px, py, light)
+                    px, py = ix + (LINE_GRID if math.sin(a) > 0 else 0), iy + (LINE_GRID if math.cos(a) > 0 else 0)
+                    if (px // LINE_GRID, py // LINE_GRID) != (ix // LINE_GRID, iy // LINE_GRID) and x0 <= px < x0 + w and y0 <= py < y0 + h:
+                        lput(img, px, py, light)
             if r.random() < branch and L > 3:
                 stack.append((ix, iy, a + r.choice([-1, 1]) * r.uniform(0.6, 1.2), L // 2))
 
@@ -208,9 +222,9 @@ def threads(img, rect, seed, n, rp, origin=None, length=8, shadow=None, branch=0
                 ix, iy = int(round(fx)), int(round(fy))
                 if not (x0 <= ix < x0 + w and y0 <= iy < y0 + h):
                     break
-                put(img, ix, iy, rp[-1] if i < L * 0.4 else rp[-2])
+                lput(img, ix, iy, rp[-1] if i < L * 0.4 else rp[-2])
                 if shadow is not None and y0 <= iy + 1 < y0 + h and get(img, ix, iy + 1)[:3] not in [c[:3] for c in rp]:
-                    put(img, ix, iy + 1, shadow)
+                    lput(img, ix, iy + LINE_GRID, shadow)
                 if r.random() < branch:
                     stack.append((ix, iy, a + r.choice([-1, 1]) * r.uniform(0.7, 1.4), max(2, L // 2)))
 
@@ -424,6 +438,31 @@ def stroke(img, rect, pts, rp, width=1, shade=None, glow=False, clip=True, core=
     r = random.Random(seed)
     P = path_points(rect, pts)
     done = set()
+    g = LINE_GRID
+    if g >= 2:
+        # 절충안(바닐라 밀도): 1배 칸 단위로 한 줄. 빛 점도 칸 단위로, 선과 뭉치지 않게 성기게
+        cells = set()
+        narrow = min(w, h) // g <= 3            # 팔다리처럼 좁은 면: 지그재그가 덩어리가 되므로 첫 꺾임(짧은 대각선)만
+        segs = list(zip(P, P[1:]))[:1] if narrow else list(zip(P, P[1:]))
+        for (ax, ay), (bx, by) in segs:
+            n = int(max(abs(bx - ax), abs(by - ay))) + 1
+            for i in range(n + 1):
+                t = i / max(1, n)
+                x, y = int(round(ax + (bx - ax) * t)), int(round(ay + (by - ay) * t))
+                if clip and not (x0 <= x < x0 + w and y0 <= y < y0 + h):
+                    continue
+                cells.add((x // g, y // g))
+        for (cx, cy) in cells:
+            lput(img, cx * g, cy * g, rp[core] if glow else rp[-2])
+        if glow and not narrow:
+            for (cx, cy) in sorted(cells):
+                for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    q = (cx + ox, cy + oy)
+                    if q in cells or not (x0 <= q[0] * g < x0 + w and y0 <= q[1] * g < y0 + h):
+                        continue
+                    if r.random() < halo_p * 0.4:
+                        lput(img, q[0] * g, q[1] * g, rp[halo])
+        return
     for (ax, ay), (bx, by) in zip(P, P[1:]):
         n = int(max(abs(bx - ax), abs(by - ay))) + 1
         for i in range(n + 1):
