@@ -31,6 +31,18 @@ object ZomConfig {
         seasonStart = p.getProperty("season.start")?.let { runCatching { java.time.LocalDate.parse(it.trim()) }.getOrNull() } ?: seasonStart
     }
 
+    /** 시즌 시작(snw `/snw season start` 가 알린다): 그날을 감염 전역 램프 0일째로 저장한다. */
+    fun setSeasonStart(date: java.time.LocalDate) {
+        seasonStart = date
+        val p = Properties()
+        runCatching {
+            if (Files.exists(path)) Files.newBufferedReader(path).use { p.load(it) }
+            p.setProperty("season.start", date.toString())
+            Files.createDirectories(path.parent)
+            Files.newBufferedWriter(path).use { p.store(it, "zomApo 운영 설정") }
+        }.onFailure { ZomApo.log.warn("[zomApo] 설정을 저장하지 못했습니다: {}", it.message) }
+    }
+
     fun setMotionIntensity(v: Double) {
         motionIntensity = MotionRules.clampIntensity(v)
         val p = Properties()

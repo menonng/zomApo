@@ -217,6 +217,11 @@ object Infection {
         ServerLifecycleEvents.SERVER_STARTED.register { s ->
             load(s); recompute(s)
             NationBridge.setScoreSource { score(it) }
+            // 시즌 시작 명령(snw)이 그날을 전역 램프 0일째로
+            NationBridge.subscribe("season_start") { d ->
+                (d["date"] as? String)?.let { runCatching { ZomConfig.setSeasonStart(LocalDate.parse(it)) } }
+                recompute(s)
+            }
         }
         ServerLifecycleEvents.SERVER_STOPPING.register { s -> save(s) }
         ServerTickEvents.END_SERVER_TICK.register { s ->

@@ -24,4 +24,5 @@ object NationBridge {
     fun setScoreSource(f: (UUID) -> Double) { if (present) runCatching { SnwLink.setScoreSource(f) } }
     fun core(nation: String): CoreInfo? = if (present) runCatching { SnwLink.core(nation) }.getOrNull() else null
     fun publish(type: String, data: Map<String, Any?>) { if (present) runCatching { SnwLink.publish(type, data) } }
+    fun subscribe(type: String, f: (Map<String, Any?>) -> Unit) { if (present) runCatching { SnwLink.subscribe(type, f) } }
 }
