@@ -121,7 +121,8 @@ internal object ZomSmoke {
         val sk = make(net.minecraft.world.entity.EntityTypes.SKELETON)
         sl.eventOverride = null
         if (sl.spawnLevel(z4) != 4) f += "이벤트 레벨이 좀비에 굳지 않음"
-        if (z4.maxHealth < 29f) f += "Lv4 체력 ×1.5 가 아님: ${z4.maxHealth}"
+        val hpMod = z4.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH)?.getModifier(net.minecraft.resources.Identifier.fromNamespaceAndPath("zomapo", "level_health"))
+        if (hpMod == null || Math.abs(hpMod.amount() - 0.5) > 1e-6) f += "Lv4 체력 ×1.5 보정이 없음"   // 변종(러너·탱커)이 붙을 수 있어 최종 체력이 아니라 보정을 본다
         if (!sl.immuneToSun(z4)) f += "Lv4 출신이 햇빛에 탐"
         if (!dev.menonng.zomapo.gimmick.Zombified.isZombified(sk)) f += "Lv4 이벤트 스켈레톤이 좀비화되지 않음"
         val sk0 = make(net.minecraft.world.entity.EntityTypes.SKELETON)
@@ -212,6 +213,16 @@ internal object ZomSmoke {
         v.snapTo(d.x + 3.5, d.y.toDouble(), d.z + 0.5, 0f, 0f); level.addFreshEntity(v)
         brain.tryDoor(level, z, v, dev.menonng.zomapo.ai.ZombieBrain.St(), System.currentTimeMillis())
         if (level.getBlockState(d.east()).getValue(net.minecraft.world.level.block.DoorBlock.OPEN) != true) f += "Lv2 좀비가 참나무 문을 열지 않음"
+        // 소음보다 추적이 먼저: 표적이 있는 좀비는 소리에 끌려가지 않는다
+        val chaser = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        val idle = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+        chaser.snapTo(d.x + 0.5, d.y.toDouble(), d.z + 1.5, 0f, 0f); idle.snapTo(d.x + 0.5, d.y.toDouble(), d.z - 1.5, 0f, 0f)
+        level.addFreshEntity(chaser); level.addFreshEntity(idle)
+        chaser.target = v
+        dev.menonng.zomapo.gimmick.NoiseSystem.emit(level, net.minecraft.world.phys.Vec3(d.x + 6.0, d.y.toDouble(), d.z + 0.5), 16)
+        if (dev.menonng.zomapo.gimmick.NoiseSystem.investigating(chaser)) f += "표적을 쫓던 좀비가 소음에 끌려감"
+        if (!dev.menonng.zomapo.gimmick.NoiseSystem.investigating(idle)) f += "표적 없는 좀비가 소음을 듣지 않음"
+        chaser.discard(); idle.discard()
         z.discard(); v.discard()
         // 변종: 탱커 체력 60·크기, 러너 체력 14
         val vs = dev.menonng.zomapo.gimmick.VariantSystem

@@ -13,7 +13,7 @@ import java.util.WeakHashMap
 
 /**
  * 소음 런타임(docs/design/zombies.md '감염 레벨' 4-2, 반응자 고르기는 logic 의 Noise).
- * 소리가 나면 반경 안의 좀비 계열 중 지금 대상이 없는 개체(가까운 순 최대 8, 같은 좀비는 10초에 한 번, 서버 전체 초당 40)가
+ * 소리가 나면 반경 안의 좀비 계열 중 이미 쫓는 대상이 없는 개체([busy] 가 아님)(가까운 순 최대 8, 같은 좀비는 10초에 한 번, 서버 전체 초당 40)가
  * 소리 난 곳으로 걸어가 살핀다. 30초 안에 못 가면 그만둔다. 도착하거나 가는 길에 바닐라처럼 플레이어를 보면 그쪽을 노린다.
  * [emit] 의 strike 를 켜면(소음 화살) 소리 난 곳 10블록 안에 들어선 좀비가 그 근처의 누구든(맞은 사람만이 아니라) 노린다.
  * 소리를 내는 것: 소음 약탈자의 화살, 비명꾼, 바닐라 진동 전체(VibrationNoise, 2026-11-22 연결).
@@ -26,7 +26,14 @@ object NoiseSystem {
     private var budgetSecond = -1L
     private var budgetUsed = 0
 
-    fun isZombie(m: Mob): Boolean = m.isAlive && m !is Phantom && (m is Zombie || Zombified.isZombified(m))
+    fun isZombie(m: Mob): Boolean = m.isAlive && m !is Phantom && (m is Zombie || Zombified.isZombified(m)) && !dev.menonng.zomapo.death.RevenantSystem.isRevenant(m)
+
+    /**
+     * 이미 쫓는 대상이 있는가(2026-11-23: 소음보다 추적이 먼저). 표적이 있거나, 놓친 표적의 마지막 자리를 확인하러 가는 중(냄새 맡기)이거나,
+     * 땅굴·매복 중이거나, 좀비 떼(고정 플레이어)·블러드문(국가 코어)의 목표가 있으면 소음에 끌려가지 않는다.
+     */
+    fun busy(m: Mob): Boolean = m.target != null || dev.menonng.zomapo.ai.ZombieBrain.tracking(m) ||
+        m.entityTags().contains(BloodMoonSystem.TAG) || m.entityTags().contains("zomapo_horde")
 
     /** 소리 한 번. 반응한 좀비 수를 돌려준다. */
     fun emit(level: ServerLevel, pos: Vec3, radius: Int, strike: Boolean = false): Int {
@@ -37,7 +44,7 @@ object NoiseSystem {
         val near = level.getEntitiesOfClass(Mob::class.java, AABB.ofSize(pos, r * 2, r, r * 2)) { isZombie(it) }
         if (near.isEmpty()) return 0
         val byId = near.associateBy { it.id }
-        val listeners = near.map { Listener(it.id, it.position().distanceTo(pos), it.target != null, lastInvestigate[it] ?: Long.MIN_VALUE / 2) }
+        val listeners = near.map { Listener(it.id, it.position().distanceTo(pos), busy(it), lastInvestigate[it] ?: Long.MIN_VALUE / 2) }
         val ids = Noise.respondersWithin(r, listeners, now, Noise.GLOBAL_BUDGET_PER_SECOND - budgetUsed)
         for (id in ids) {
             val m = byId[id] ?: continue
@@ -58,7 +65,7 @@ object NoiseSystem {
         while (it.hasNext()) {
             val (m, inv) = it.next()
             if (m.level() !== level) continue
-            if (!m.isAlive || m.isRemoved || m.target != null || now > inv.until) { it.remove(); continue }
+            if (!m.isAlive || m.isRemoved || busy(m) || now > inv.until) { it.remove(); continue }
             val d = m.position().distanceTo(inv.pos)
             if (inv.strike && d <= Noise.STRIKE_RADIUS) {
                 // 소음 화살: 소리 난 곳 근처의 누구든

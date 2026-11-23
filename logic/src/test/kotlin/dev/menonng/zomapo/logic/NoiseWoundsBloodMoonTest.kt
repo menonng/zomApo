@@ -25,7 +25,7 @@ class NoiseTest {
     @Test
     @DisplayName("소음: 반경 안·표적 없음·쿨다운 지난 좀비만, 가까운 순 최대 8, 웅크리면 플레이어 소음 절반")
     fun case01() {
-        val ls = (1..12).map { Listener(it, distance = it * 1.5, hasTarget = it == 2, lastInvestigateTick = if (it == 3) 950 else 0) }
+        val ls = (1..12).map { Listener(it, distance = it * 1.5, tracking = it == 2, lastInvestigateTick = if (it == 3) 950 else 0) }
         assertEquals(listOf(1, 4, 5, 6, 7, 8), Noise.responders(NoiseSource.MELEE, false, ls, 1000))         // 반경 12
         assertEquals(listOf(1, 4, 5, 6, 7, 8, 9, 10), Noise.responders(NoiseSource.EXPLOSION, false, ls, 1000)) // 최대 8
         // 웅크린 근접 타격: 반경 6 → 1.5, 4.5(4번만, 3번은 쿨다운) 6.0

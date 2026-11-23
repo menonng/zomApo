@@ -100,7 +100,7 @@ object VariantSystem {
         nextScream[m] = now + 20L * (45 + m.random.nextInt(31))
         level.playSound(null, m.x, m.y, m.z, SoundEvents.RAVAGER_ROAR, SoundSource.HOSTILE, 2.5f, 1.6f)
         NoiseSystem.emit(level, m.position(), 32)
-        for (o in level.getEntitiesOfClass(Mob::class.java, m.boundingBox.inflate(32.0)) { it !== m && it.target == null && NoiseSystem.isZombie(it) }) o.target = t
+        for (o in level.getEntitiesOfClass(Mob::class.java, m.boundingBox.inflate(32.0)) { it !== m && !NoiseSystem.busy(it) && NoiseSystem.isZombie(it) }) o.target = t
         val lv = SpawnLevels.spawnLevel(m) ?: 0
         val count = m.random.nextInt(5)
         SpawnLevels.eventOverride = lv to SpawnSource.NATURAL

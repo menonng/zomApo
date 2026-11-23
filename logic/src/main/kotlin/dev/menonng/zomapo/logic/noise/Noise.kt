@@ -68,7 +68,11 @@ object Vibrations {
 data class Listener(
     val id: Int,
     val distance: Double,
-    val hasTarget: Boolean,
+    /**
+     * 이미 쫓는 대상이 있다(2026-11-23: 소음보다 추적이 먼저). 표적이 있거나, 놓친 표적의 마지막 자리를 확인하러 가는 중이거나,
+     * 땅굴·매복으로 표적을 노리는 중이거나, 좀비 떼·블러드문의 고정 목표(플레이어·국가 코어)가 있으면 true.
+     */
+    val tracking: Boolean,
     /** 이 개체가 마지막으로 조사를 시작한 게임 틱. */
     val lastInvestigateTick: Long,
 )
@@ -98,7 +102,7 @@ object Noise {
     /** 반경을 직접 주는 판(소음 화살 24 처럼 소리 종류 밖의 소음). */
     fun respondersWithin(r: Double, listeners: List<Listener>, nowTick: Long, budgetLeft: Int = GLOBAL_BUDGET_PER_SECOND): List<Int> {
         return listeners.asSequence()
-            .filter { it.distance <= r && !it.hasTarget && nowTick - it.lastInvestigateTick >= INVESTIGATE_COOLDOWN_TICKS }
+            .filter { it.distance <= r && !it.tracking && nowTick - it.lastInvestigateTick >= INVESTIGATE_COOLDOWN_TICKS }
             .sortedBy { it.distance }
             .take(minOf(MAX_RESPONDERS, budgetLeft.coerceAtLeast(0)))
             .map { it.id }

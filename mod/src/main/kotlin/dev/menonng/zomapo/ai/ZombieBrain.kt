@@ -88,6 +88,9 @@ object ZombieBrain {
     private val states = WeakHashMap<Mob, St>()
     private var tick = 0L
 
+    /** 놓친 표적을 아직 쫓는 중(마지막 자리 확인)이거나 땅굴·매복으로 노리는 중. 소음보다 먼저다(NoiseSystem.busy). */
+    fun tracking(m: Mob): Boolean = states[m]?.let { it.hadTarget || it.tunnel != null || it.ambushPos != null } ?: false
+
     fun profileOf(m: Mob): ZombieAiProfile? {
         val lv = SpawnLevels.spawnLevel(m) ?: return null
         return if (m.getAttached(VariantTag.VARIANT) == "DIGGER") ZombieAi.diggerProfile(lv) else ZombieAi.profile(lv)
