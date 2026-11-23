@@ -66,15 +66,12 @@ object VariantSystem {
                 m.getAttribute(Attributes.KNOCKBACK_RESISTANCE)?.addOrReplacePermanentModifier(AttributeModifier(id("knock"), 0.8, AttributeModifier.Operation.ADD_VALUE))
                 m.getAttribute(Attributes.ATTACK_KNOCKBACK)?.addOrReplacePermanentModifier(AttributeModifier(id("push"), 1.0, AttributeModifier.Operation.ADD_VALUE))
             }
+            Variant.SCREAMER -> { m.setItemSlot(EquipmentSlot.HEAD, head(v)!!); m.setDropChance(EquipmentSlot.HEAD, 0f) }
             Variant.DIGGER -> {
-                m.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.CHAINMAIL_HELMET)); m.setDropChance(EquipmentSlot.HEAD, 0f)
+                m.setItemSlot(EquipmentSlot.HEAD, head(v)!!); m.setDropChance(EquipmentSlot.HEAD, 0f)
                 m.setItemSlot(EquipmentSlot.MAINHAND, ItemStack(Items.STONE_PICKAXE)); m.setDropChance(EquipmentSlot.MAINHAND, 0f)
             }
-            Variant.LURKER -> {
-                val cap = ItemStack(Items.LEATHER_HELMET)
-                cap.set(net.minecraft.core.component.DataComponents.DYED_COLOR, net.minecraft.world.item.component.DyedItemColor(0x1E1E1E))
-                m.setItemSlot(EquipmentSlot.HEAD, cap); m.setDropChance(EquipmentSlot.HEAD, 0f)
-            }
+            Variant.LURKER -> { m.setItemSlot(EquipmentSlot.HEAD, head(v)!!); m.setDropChance(EquipmentSlot.HEAD, 0f) }
             else -> {}
         }
         m.health = m.maxHealth
@@ -119,14 +116,22 @@ object VariantSystem {
     }
 
     /** 잠복자: 가만히 서 있고 어둡고(7 이하) 6블록 안에 플레이어가 없고 최근에 맞지 않았으면 투명. 드러난 뒤 첫 타 ×1.5. */
+    /** 머리 모델(zombies.md 7절): 종이 + item_model → 리소스팩 `zomapo:head/<이름>`. 바닐라 클라이언트가 머리 칸 아이템으로 그린다. */
+    fun head(v: Variant): ItemStack? {
+        val name = when (v) { Variant.SCREAMER -> "screamer_jaw"; Variant.DIGGER -> "miner_helmet"; Variant.LURKER -> "lurker_hood"; else -> return null }
+        return ItemStack(Items.PAPER).also { it.set(net.minecraft.core.component.DataComponents.ITEM_MODEL, Identifier.fromNamespaceAndPath("zomapo", "head/$name")) }
+    }
+
     private fun lurk(level: ServerLevel, m: Mob) {
         val still = m.deltaMovement.horizontalDistanceSqr() < 1.0E-4
         val dark = level.getMaxLocalRawBrightness(m.blockPosition()) <= 7
         val nearPlayer = level.getNearestPlayer(m, 6.0) != null
         val hurtRecently = m.lastHurtByMob != null && m.tickCount - m.lastHurtByMobTimestamp < 100
         val hide = still && dark && !nearPlayer && !hurtRecently
-        if (hide) { m.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false)); lurkerRevealed[m] = false }
-        else if (m.hasEffect(MobEffects.INVISIBILITY) && lurkerRevealed[m] == false) { m.removeEffect(MobEffects.INVISIBILITY); lurkerRevealed[m] = true }
+        // 투명해도 머리 칸 아이템은 보이므로, 숨는 동안 두건을 벗기고 드러날 때 다시 씌운다
+        if (hide) { m.addEffect(MobEffectInstance(MobEffects.INVISIBILITY, 40, 0, false, false)); lurkerRevealed[m] = false; if (!m.getItemBySlot(EquipmentSlot.HEAD).isEmpty) m.setItemSlot(EquipmentSlot.HEAD, ItemStack.EMPTY) }
+        else if (m.hasEffect(MobEffects.INVISIBILITY) && lurkerRevealed[m] == false) { m.removeEffect(MobEffects.INVISIBILITY); lurkerRevealed[m] = true; m.setItemSlot(EquipmentSlot.HEAD, head(Variant.LURKER)!!) }
+        else if (!hide && m.getItemBySlot(EquipmentSlot.HEAD).isEmpty) m.setItemSlot(EquipmentSlot.HEAD, head(Variant.LURKER)!!)
     }
 
     fun register() {
