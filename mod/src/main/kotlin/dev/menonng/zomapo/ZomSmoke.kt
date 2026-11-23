@@ -144,6 +144,54 @@ internal object ZomSmoke {
         f += nestChecks(server)
         f += enchantChecks(server)
         f += familyChecks(server)
+        f += cureChecks(server)
+        return f
+    }
+
+    /** 붕대(조합법·출혈 멈춤·출혈 없으면 안 씀), 망자 남용 대비, 백신 조각·엔딩(감염 레벨 고정과 되돌리기). */
+    private fun cureChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        try {
+            val craft = server.recipeManager.byKey(key("zomapo", "bandage_crafting")).orElse(null)?.value() as? CraftingRecipe
+            if (craft == null) f += "붕대 조합법 없음" else {
+                val input = CraftingInput.of(2, 1, listOf(ItemStack(Items.PAPER), ItemStack(Items.STRING)))
+                if (!craft.matches(input, level)) f += "붕대 조합법이 맞지 않음"
+                else {
+                    val out = craft.assemble(input)
+                    if (out.count != 2 || !ItemStack.isSameItemSameComponents(out, ZomItems.bandage())) f += "붕대 결과물 불일치: ${out.count} ${out.components}"
+                }
+            }
+            val fake = FakePlayer.get(level)
+            WoundsSystem.set(fake, WoundState())
+            if (WoundsSystem.onConsume(fake, ZomItems.bandage())) f += "출혈이 없는데 붕대가 쓰임"
+            WoundsSystem.bleed(fake)
+            if (!WoundsSystem.state(fake).bleeding) f += "출혈이 걸리지 않음(붕대 검사)"
+            if (!WoundsSystem.onConsume(fake, ZomItems.bandage()) || WoundsSystem.state(fake).bleeding) f += "붕대가 출혈을 멈추지 않음"
+            // 망자 남용 대비
+            val rz = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND)!!
+            rz.addTag(dev.menonng.zomapo.death.RevenantSystem.TAG)
+            if (!rz.isIgnoringBlockTriggers) f += "망자가 압력판을 밟음"
+            if (rz.isPushable) f += "망자가 밀림"
+            if (rz.canUsePortal(false)) f += "망자가 포탈을 탐"
+            if (!rz.isSteppingCarefully) f += "망자가 발걸음 진동을 냄"
+            // 백신 조각·엔딩
+            val cure = dev.menonng.zomapo.cure.Cure
+            val before = cure.count()
+            cure.award(fake, "smoke")
+            if (cure.count() != before + 1) f += "백신 조각이 세어지지 않음"
+            if (!fake.inventory.contains { dev.menonng.zomapo.item.ZomItems.idOf(it) == dev.menonng.zomapo.cure.Cure.SHARD }) f += "백신 조각 아이템을 받지 못함"
+            if (cure.ending() == null) {
+                cure.play(server, dev.menonng.zomapo.logic.cure.VaccineEnding.Ending.DOOM)
+                if (dev.menonng.zomapo.infection.Infection.levelAt(level, 9000.0, 9000.0) != 5.0) f += "멸망 엔딩 뒤 감염 레벨이 5 가 아님"
+                if (dev.menonng.zomapo.infection.Infection.levelAt(level, 10.0, 10.0) != 0.0) f += "멸망 엔딩 뒤 캠프가 안전하지 않음"
+                cure.play(server, dev.menonng.zomapo.logic.cure.VaccineEnding.Ending.SALVATION)
+                if (dev.menonng.zomapo.infection.Infection.levelAt(level, 9000.0, 9000.0) != 0.0) f += "구원 엔딩 뒤 감염 레벨이 0 이 아님"
+                cure.reset(server)
+                if (cure.forced != null || cure.ending() != null) f += "엔딩 되돌리기가 안 됨"
+            }
+            cure.state.shards.removeIf { it.source == "smoke" }; cure.save(server)
+        } catch (t: Throwable) { f += "붕대·망자·엔딩 검사 중 예외: $t" }
         return f
     }
 

@@ -61,6 +61,8 @@ import java.util.WeakHashMap
 object RevenantSystem {
     const val TAG = "zomapo_revenant"
     const val TETHER = 16.0
+    const val TEAM = "zomapo_revenant"
+    const val GLOW_RANGE = 32.0
     private val RED = TextColor.fromRgb(0xFF0045)
 
     // ---- 장부(주인 플레이어 부착) ----
@@ -220,9 +222,38 @@ object RevenantSystem {
         for (slot in listOf(EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND))
             p.inventory.let { _ -> items.firstOrNull { s -> s.get(DataComponents.EQUIPPABLE)?.slot() == slot }?.let { z.setItemSlot(slot, it.copyWithCount(1)) } }
         for (slot in EquipmentSlot.entries) z.setDropChance(slot, 0f)
-        (z as MobAccessor).`zomapo$targetSelector`().removeAllGoals { true }        // 주인만 노린다(아래 1초 틱)
+        prepare(z)
         level.addFreshEntity(z)
         loaded += z
+    }
+
+    /** 주인만 노린다(아래 1초 틱), 거북알을 노리지 않는다, 충돌 없는 팀(다른 사람이 부딪히거나 밀지 못함). 불러올 때도 다시. */
+    private fun prepare(z: Zombie) {
+        (z as MobAccessor).`zomapo$targetSelector`().removeAllGoals { true }
+        (z as MobAccessor).`zomapo$goalSelector`().removeAllGoals { it is net.minecraft.world.entity.ai.goal.RemoveBlockGoal }
+        val sb = (z.level() as? ServerLevel)?.server?.scoreboard ?: return
+        val team = sb.getPlayerTeam(TEAM) ?: sb.addPlayerTeam(TEAM).also {
+            it.collisionRule = net.minecraft.world.scores.Team.CollisionRule.NEVER
+            it.nameTagVisibility = net.minecraft.world.scores.Team.Visibility.ALWAYS
+        }
+        if (sb.getPlayersTeam(z.scoreboardName) !== team) sb.addPlayerToTeam(z.scoreboardName, team)
+    }
+
+    /** 주인에게만 발광 테두리(32블록 안). 진짜로 걸지 않고 주인에게 보내는 상태 패킷에만 발광 비트를 켠다. */
+    private val glowingFor = java.util.WeakHashMap<Zombie, UUID>()
+    private fun ownerGlow(z: Zombie, p: ServerPlayer?) {
+        val id = dev.menonng.zomapo.mixin.EntityAccessor.`zomapo$sharedFlagsId`()
+        val near = p != null && p.level() === z.level() && p.distanceTo(z) <= GLOW_RANGE
+        val was = glowingFor[z]
+        if (near) {
+            val flags = z.entityData.get(id).toInt() or 0x40
+            p!!.connection.send(net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(z.id, listOf(net.minecraft.network.syncher.SynchedEntityData.DataValue.create(id, flags.toByte()))))
+            glowingFor[z] = p.uuid
+        } else if (was != null) {
+            glowingFor.remove(z)
+            (z.level() as ServerLevel).server.playerList.getPlayer(was)?.connection?.send(
+                net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(z.id, listOf(net.minecraft.network.syncher.SynchedEntityData.DataValue.create(id, z.entityData.get(id)))))
+        }
     }
 
     /** 가장 오래된 망자가 무너진다: 그 자리에 보존 드랍(청크를 잠깐 불러온다). */
@@ -272,11 +303,13 @@ object RevenantSystem {
             val home = p?.let { stash(it).entries.firstOrNull { e -> e.id == id } }
             if (home != null && z.position().distanceTo(Vec3(home.x + 0.5, home.y.toDouble(), home.z + 0.5)) > TETHER) z.teleportTo(home.x + 0.5, home.y.toDouble(), home.z + 0.5)
             z.target = if (p != null && p.level() === level && p.isAlive && !p.isSpectator && z.distanceTo(p) < 32) p else null
+            if (z.isPassenger) z.stopRiding()
+            ownerGlow(z, p)
         }
     }
 
     fun register() {
-        ServerEntityEvents.ENTITY_LOAD.register { e, _ -> if (e is Zombie && isRevenant(e)) { loaded += e; (e as MobAccessor).`zomapo$targetSelector`().removeAllGoals { true } } }
+        ServerEntityEvents.ENTITY_LOAD.register { e, _ -> if (e is Zombie && isRevenant(e)) { loaded += e; prepare(e) } }
         ServerLivingEntityEvents.ALLOW_DAMAGE.register { victim, src, _ ->
             when {
                 isRevenant(victim) -> (src.entity as? Player)?.let { isOwner(victim, it) } ?: false        // 주인이 준 피해만

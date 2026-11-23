@@ -115,6 +115,7 @@ object Infection {
     /** 청크 레벨(소수). [x],[z] 는 블록 좌표. */
     fun levelAt(level: Level, x: Double, z: Double): Double {
         val d = dim(level)
+        dev.menonng.zomapo.cure.Cure.forced?.let { f -> return if (f > 0.0 && inCamp(level, x, z)) 0.0 else f }   // 엔딩 뒤: 구원 0, 멸망 5(캠프 제외)
         val cx = Math.floorDiv(x.toInt(), 16); val cz = Math.floorDiv(z.toInt(), 16)
         val raw = when (d) {
             "minecraft:the_end" -> NetherLevels.end()

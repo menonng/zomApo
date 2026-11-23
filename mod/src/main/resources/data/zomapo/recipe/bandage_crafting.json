@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:paper",
+    "minecraft:string"
+  ],
+  "result": {
+    "id": "minecraft:paper",
+    "count": 2,
+    "components": {
+      "minecraft:item_name": {
+        "translate": "item.zomapo.bandage",
+        "fallback": "붕대"
+      },
+      "minecraft:custom_model_data": {
+        "strings": [
+          "zomapo:bandage"
+        ]
+      },
+      "minecraft:consumable": {
+        "consume_seconds": 1.5,
+        "animation": "brush",
+        "sound": "minecraft:block.wool.hit",
+        "has_consume_particles": false
+      },
+      "minecraft:custom_data": {
+        "zomapo": "bandage"
+      }
+    }
+  }
+}

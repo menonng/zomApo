@@ -1,5 +1,7 @@
 {
   "item.minecraft.potion.effect.zomapo_antidote": "Antidote",
   "item.zomapo.virus_crystal": "Virus Crystal",
-  "effect.zomapo.cure_infection": "Cures Infection"
+  "effect.zomapo.cure_infection": "Cures Infection",
+  "item.zomapo.bandage": "Bandage",
+  "item.zomapo.vaccine_shard": "Vaccine Shard"
 }

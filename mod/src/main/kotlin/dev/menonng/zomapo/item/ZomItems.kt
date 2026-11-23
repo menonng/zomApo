@@ -28,6 +28,7 @@ object ZomItems {
     const val KEY = "zomapo"
     const val ANTIDOTE = "antidote"
     const val VIRUS_CRYSTAL = "virus_crystal"
+    const val BANDAGE = "bandage"
 
     fun idOf(stack: ItemStack): String? {
         if (stack.isEmpty) return null
@@ -43,6 +44,9 @@ object ZomItems {
     fun isAntidote(stack: ItemStack): Boolean = stack.`is`(Items.POTION) && idOf(stack) == ANTIDOTE
 
     fun isVirusCrystal(stack: ItemStack): Boolean = stack.`is`(Items.AMETHYST_SHARD) && idOf(stack) == VIRUS_CRYSTAL
+
+    @JvmStatic
+    fun isBandage(stack: ItemStack): Boolean = stack.`is`(Items.PAPER) && idOf(stack) == BANDAGE
 
     private fun tag(id: String) = CustomData.of(CompoundTag().apply { putString(KEY, id) })
 
@@ -65,5 +69,18 @@ object ZomItems {
         set(DataComponents.CUSTOM_MODEL_DATA, CustomModelData(listOf(), listOf(), listOf(Antidote.CRYSTAL_MODEL), listOf()))
         remove(DataComponents.PROVIDES_TRIM_MATERIAL)
         set(DataComponents.CUSTOM_DATA, tag(VIRUS_CRYSTAL))
+    }
+
+    /** 붕대: 종이 + 1.5초 쓰기(붓 동작, 양털 소리). 쓰면 출혈이 멈춘다(ConsumableMixin). */
+    fun bandage(count: Int = 1): ItemStack = ItemStack(Items.PAPER, count).apply {
+        set(DataComponents.ITEM_NAME, Component.translatableWithFallback(dev.menonng.zomapo.logic.effects.Bandage.NAME_KEY, "붕대"))
+        set(DataComponents.CUSTOM_MODEL_DATA, CustomModelData(listOf(), listOf(), listOf(dev.menonng.zomapo.logic.effects.Bandage.MODEL), listOf()))
+        set(DataComponents.CONSUMABLE, net.minecraft.world.item.component.Consumable.builder()
+            .consumeSeconds(dev.menonng.zomapo.logic.effects.Bandage.CONSUME_SECONDS)
+            .animation(net.minecraft.world.item.ItemUseAnimation.BRUSH)
+            .sound(net.minecraft.core.registries.BuiltInRegistries.SOUND_EVENT.wrapAsHolder(net.minecraft.sounds.SoundEvents.WOOL_HIT))
+            .hasConsumeParticles(false)
+            .build())
+        set(DataComponents.CUSTOM_DATA, tag(BANDAGE))
     }
 }

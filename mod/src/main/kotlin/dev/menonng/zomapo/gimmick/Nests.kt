@@ -28,7 +28,7 @@ import kotlin.math.hypot
  * - 영역 레벨 3 이상인 영토 밖에 국가마다 하루에 하나꼴(국가당 동시 2개까지). 영토 안에는 생기지 않는다.
  *   자리는 그런 곳에 있는 플레이어 48~96블록 밖(불러온 청크), 가장 가까운 국가의 둥지로 센다.
  * - 진흙·뼈 블록·스컬크 덩굴 사이에 좀비 스포너. 스포너 좀비는 출처 '둥지'(점수 ×0.5), 레벨의 변종이 섞인다.
- * - 둥지 반경 2청크는 최소 Lv3. 스포너를 부수면: 좀비 스코어 30(48블록 안 참여자 분배), 반경 3청크 정화 −0.3(72시간), 지역 표본.
+ * - 둥지 반경 2청크는 최소 Lv3. 스포너를 부수면: 좀비 스코어 30(48블록 안 참여자 분배), 반경 3청크 정화 −0.3(72시간), 백신 조각 15%.
  * - 누군가 32블록 안에 처음 들어가면 발견(디스코드 알림, 좌표는 보내지 않는다).
  */
 object Nests {
@@ -49,8 +49,8 @@ object Nests {
     const val PURIFY_RADIUS_CHUNKS = 3
     const val MIN_LEVEL_RADIUS = 32.0
 
-    /** 지역 표본 등 둥지를 부쉈을 때의 드랍(치료제 모듈이 채운다). */
-    var onDestroyedDrop: (ServerLevel, BlockPos, String?) -> Unit = { _, _, _ -> }
+    /** 둥지를 부쉈을 때의 드랍(치료제 모듈이 채운다: 부순 사람에게 백신 조각 확률). 부순 사람이 없으면 48블록 안 참여자 중 하나. */
+    var onDestroyedDrop: (ServerLevel, BlockPos, String?, ServerPlayer?) -> Unit = { _, _, _, _ -> }
 
     fun near(dim: String, x: Double, z: Double, r: Double): Nest? = state.nests.firstOrNull { it.dim == dim && hypot(it.x - x, it.z - z) <= r }
 
@@ -112,7 +112,7 @@ object Nests {
             p.sendSystemMessage(Component.literal("감염 둥지를 부쉈습니다. 좀비 스코어 +${"%.0f".format(BONUS / party.size)}, 주변 감염도가 72시간 동안 낮아집니다.").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))))
         }
         Infection.addPurify(Infection.PurifyEvent(null, PURIFY, System.currentTimeMillis() + 72 * 3_600_000L, n.dim, n.x shr 4, n.z shr 4, PURIFY_RADIUS_CHUNKS))
-        onDestroyedDrop(level, BlockPos(n.x, n.y, n.z), n.nation)
+        onDestroyedDrop(level, BlockPos(n.x, n.y, n.z), n.nation, by ?: party.randomOrNull())
         NationBridge.publish("nest_destroyed", mapOf("nation" to n.nation))
         save(level.server)
     }

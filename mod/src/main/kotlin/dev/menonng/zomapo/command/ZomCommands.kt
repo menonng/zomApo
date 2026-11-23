@@ -50,6 +50,19 @@ object ZomCommands {
                             val ok = dev.menonng.zomapo.gimmick.BloodMoonSystem.stop(ctx.source.server)
                             ctx.source.sendSuccess({ Component.literal(if (ok) "블러드문을 끝냈습니다." else "진행 중인 블러드문이 없습니다.") }, true); 1
                         }))
+                    .then(Commands.literal("ending")
+                        .executes { ctx -> ctx.source.sendSuccess({ Component.literal(dev.menonng.zomapo.cure.Cure.status()) }, false); 1 }
+                        .then(Commands.literal("start").executes { ctx ->
+                            val ok = dev.menonng.zomapo.cure.Cure.beginFinale(ctx.source.server)
+                            ctx.source.sendSuccess({ Component.literal(if (ok) "최후의 호드를 바로 시작합니다." else "이미 엔딩이 났습니다(/zomapo ending reset 으로 되돌립니다).") }, true); 1
+                        })
+                        .then(Commands.literal("play")
+                            .then(Commands.literal("salvation").executes { ctx -> dev.menonng.zomapo.cure.Cure.play(ctx.source.server, dev.menonng.zomapo.logic.cure.VaccineEnding.Ending.SALVATION); 1 })
+                            .then(Commands.literal("doom").executes { ctx -> dev.menonng.zomapo.cure.Cure.play(ctx.source.server, dev.menonng.zomapo.logic.cure.VaccineEnding.Ending.DOOM); 1 }))
+                        .then(Commands.literal("reset").executes { ctx ->
+                            dev.menonng.zomapo.cure.Cure.reset(ctx.source.server)
+                            ctx.source.sendSuccess({ Component.literal("엔딩을 되돌렸습니다. 조각 수는 그대로입니다.") }, true); 1
+                        }))
                     .then(Commands.literal("horde").executes { ctx ->
                         val p = ctx.source.playerOrException
                         val lv = dev.menonng.zomapo.infection.Infection.displayLevel(p.level(), p.x, p.z)
@@ -141,7 +154,12 @@ object ZomCommands {
         return Commands.literal("give").then(
             Commands.argument("targets", EntityArgument.players())
                 .then(item(ZomItems.ANTIDOTE) { ZomItems.antidote(it) })
-                .then(item(ZomItems.VIRUS_CRYSTAL) { ZomItems.virusCrystal(it) }),
+                .then(item(ZomItems.VIRUS_CRYSTAL) { ZomItems.virusCrystal(it) })
+                .then(item(ZomItems.BANDAGE) { ZomItems.bandage(it) })
+                .then(Commands.literal(dev.menonng.zomapo.cure.Cure.SHARD).executes { ctx ->
+                    val list = targets(ctx); for (p in list) dev.menonng.zomapo.cure.Cure.award(p, "command")
+                    ctx.source.sendSuccess({ Component.literal("${list.size}명에게 백신 조각을 주었습니다(서버 전체 수에 더해집니다).") }, true); list.size
+                }),
         )
     }
 

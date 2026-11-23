@@ -66,12 +66,12 @@ object BloodMoonSystem {
         val bar: ServerBossEvent = ServerBossEvent(UUID.randomUUID(), Component.literal(""), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.PROGRESS),
     )
 
-    private class Run(val id: Long, val noticeAt: Long, val startAt: Long, val sites: List<Site>) {
+    private class Run(val id: Long, val noticeAt: Long, val startAt: Long, val sites: List<Site>, val label: String = "블러드문") {
         var started = false
         var wave = 0
         val pending = mutableListOf<Triple<Long, Site, Int>>()      // (게임 틱, 수도, 무리 수)
         var alphaDone = false
-        val bar = ServerBossEvent(UUID.randomUUID(), Component.literal("블러드문"), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.PROGRESS)
+        val bar = ServerBossEvent(UUID.randomUUID(), Component.literal(label), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.PROGRESS)
     }
 
     data class Saved(var lastEnd: Long = 0L, var counter: Long = 0L)
@@ -82,6 +82,10 @@ object BloodMoonSystem {
     private fun file(s: MinecraftServer) = s.getWorldPath(LevelResource.ROOT).resolve("zomapo").resolve("bloodmoon.json")
 
     val active: Boolean get() = run?.started == true
+    /** 예고 중(아직 시작 전). */
+    fun pending(): Boolean = run != null && run?.started == false
+    /** 끝날 때(이름표와 함께). 최후의 호드가 끝나면 엔딩으로 넘어간다. */
+    var onEnd: ((MinecraftServer, String) -> Unit)? = null
     fun activeId(): Long? = run?.takeIf { it.started }?.id
 
     private fun msg(text: String) = Component.literal(text).withStyle(Style.EMPTY.withColor(RED))
@@ -100,7 +104,7 @@ object BloodMoonSystem {
 
     // ---- 발동 ----
     private fun check(s: MinecraftServer) {
-        if (run != null || !NationBridge.present) return
+        if (run != null || !NationBridge.present || dev.menonng.zomapo.cure.Cure.blocksBloodMoon()) return
         val now = System.currentTimeMillis()
         val last = if (saved.lastEnd == 0L) ZomConfig.seasonStart.atStartOfDay(Infection.zone).toInstant().toEpochMilli() else saved.lastEnd
         val local = LocalDateTime.now(Infection.zone).toLocalTime()
@@ -111,7 +115,7 @@ object BloodMoonSystem {
     }
 
     /** 예고를 시작한다(운영자 명령은 [noticeMinutes] 0 으로 바로). */
-    fun schedule(s: MinecraftServer, nations: List<String>, noticeMinutes: Int): Boolean {
+    fun schedule(s: MinecraftServer, nations: List<String>, noticeMinutes: Int, label: String = "블러드문"): Boolean {
         if (run != null) return false
         val sites = nations.mapNotNull { id ->
             val c = NationBridge.core(id) ?: return@mapNotNull null
@@ -121,7 +125,7 @@ object BloodMoonSystem {
         if (sites.isEmpty()) return false
         val now = s.overworld().gameTime
         saved.counter++
-        run = Run(saved.counter, now, now + noticeMinutes * 1200L, sites)
+        run = Run(saved.counter, now, now + noticeMinutes * 1200L, sites, label)
         if (noticeMinutes > 0) {
             title(s, "${noticeMinutes}분 뒤 블러드문", "모든 수도에 좀비가 몰려옵니다")
             for (p in s.playerList.players) p.sendSystemMessage(msg("${noticeMinutes}분 뒤 블러드문이 시작됩니다. 모든 수도에 좀비가 몰려옵니다. 자기 수도로 돌아가 국가 코어를 지키십시오."))
@@ -137,7 +141,7 @@ object BloodMoonSystem {
         s.commands.performPrefixedCommand(s.createCommandSourceStack().withSuppressedOutput(), "weather thunder 2400")
         ow.gameRules.set(GameRules.ADVANCE_TIME, false, s)
         NationBridge.setTruce(true, r.sites.map { NationBridge.CoreInfo(it.nation, it.dimension, it.x, it.y, it.z, it.hpStart) }, BloodMoon.ZONE_RADIUS)
-        title(s, "블러드문", "30분 동안 휴전 — 국가 코어를 지키십시오")
+        title(s, r.label, "30분 동안 휴전 — 국가 코어를 지키십시오")
         NationBridge.publish("bloodmoon_start", mapOf("nations" to r.sites.map { it.name }))
         startWave(s, r, 1)
     }
@@ -278,7 +282,7 @@ object BloodMoonSystem {
             for (p in s.playerList.players) if (inZone(p, site)) site.bar.addPlayer(p) else site.bar.removePlayer(p)
         }
         val remain = (BloodMoon.DURATION_MINUTES * 1200L - elapsed).coerceAtLeast(0) / 20
-        r.bar.name = Component.literal("블러드문 · 웨이브 ${r.wave}/3 · %02d:%02d 남음 · 휴전".format(remain / 60, remain % 60))
+        r.bar.name = Component.literal("${r.label} · 웨이브 ${r.wave}/3 · %02d:%02d 남음 · 휴전".format(remain / 60, remain % 60))
         r.bar.progress = remain / (BloodMoon.DURATION_MINUTES * 60f)
         for (p in s.playerList.players) if (p.level().dimension() == net.minecraft.world.level.Level.OVERWORLD) r.bar.addPlayer(p) else r.bar.removePlayer(p)
         // 다른 수도 방어선 한 줄(10초마다)
@@ -322,12 +326,13 @@ object BloodMoonSystem {
         s.commands.performPrefixedCommand(s.createCommandSourceStack().withSuppressedOutput(), "time set day")
         s.commands.performPrefixedCommand(s.createCommandSourceStack().withSuppressedOutput(), "weather clear")
         val summary = r.sites.joinToString(", ") { "${it.name} ${if (results[it.nation] == true) "성공" else "실패"}(${it.wavesHeld}/3)" }
-        title(s, "블러드문 끝", summary)
-        for (p in s.playerList.players) p.sendSystemMessage(msg("블러드문이 끝났습니다. $summary. 휴전이 풀렸습니다."))
+        title(s, "${r.label} 끝", summary)
+        for (p in s.playerList.players) p.sendSystemMessage(msg("${r.label}이(가) 끝났습니다. $summary. 휴전이 풀렸습니다."))
         NationBridge.publish("bloodmoon_end", mapOf("results" to r.sites.map { mapOf("nation" to it.name, "success" to (results[it.nation] == true), "waves" to it.wavesHeld) }))
         saved.lastEnd = now
         run = null
         Infection.recompute(s)
+        onEnd?.invoke(s, r.label)
         save(s)
     }
 

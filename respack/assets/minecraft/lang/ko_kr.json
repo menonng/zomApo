@@ -1,5 +1,7 @@
 {
   "item.minecraft.potion.effect.zomapo_antidote": "해독제",
   "item.zomapo.virus_crystal": "바이러스 결정",
-  "effect.zomapo.cure_infection": "감염 해제"
+  "effect.zomapo.cure_infection": "감염 해제",
+  "item.zomapo.bandage": "붕대",
+  "item.zomapo.vaccine_shard": "백신 조각"
 }

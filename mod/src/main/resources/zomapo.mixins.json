@@ -31,6 +31,8 @@
     "RaidAccessor",
     "RaidNameMixin",
     "RaidsAccessor",
+    "RevenantEntityMixin",
+    "RevenantPushMixin",
     "RevenantRestMixin",
     "RevenantZombieMixin",
     "ShulkerInvoker",

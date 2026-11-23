@@ -74,6 +74,7 @@ import kotlin.random.Random
  */
 object AlphaSystem {
     const val TAG = "zomapo_alpha"
+    const val ALPHA_SCORE = 25.0
     private val CROWN = Identifier.fromNamespaceAndPath("zomapo", "head/alpha_crown")
 
     private class Run(var alpha: UUID, var target: UUID, var dim: ResourceKey<Level>, var pos: Vec3) {
@@ -419,11 +420,20 @@ object AlphaSystem {
         ServerLifecycleEvents.SERVER_STOPPING.register { save(it) }
         ServerTickEvents.END_SERVER_TICK.register { tick(it) }
         ServerEntityEvents.ENTITY_LOAD.register { e, _ -> if (e is Zombie && e.entityTags().contains(TAG)) prepare(e) }
-        ServerLivingEntityEvents.AFTER_DEATH.register { e, _ ->
+        ServerLivingEntityEvents.AFTER_DEATH.register { e, src ->
             val r = run ?: return@register
             val level = e.level() as? ServerLevel ?: return@register
             if (e.uuid == r.alpha) {
                 level.addFreshEntity(ItemEntity(level, e.x, e.y + 0.5, e.z, ZomItems.virusCrystal(3)))
+                // 보상(7-1): 처치자에게 좀비 스코어 25, 백신 조각 50%. 칭호 '사냥꾼'은 처치 기록(형태 alpha)으로 붙는다
+                val killer = (src.entity as? ServerPlayer) ?: ((e as? Zombie)?.killCredit as? ServerPlayer)
+                if (killer != null) {
+                    dev.menonng.zomapo.infection.Infection.player(killer.uuid).totalScore += ALPHA_SCORE
+                    killer.sendSystemMessage(net.minecraft.network.chat.Component.literal("알파를 쓰러뜨렸습니다. 좀비 스코어 +${ALPHA_SCORE.toInt()}, 바이러스 결정 3개.")
+                        .withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(net.minecraft.network.chat.TextColor.fromRgb(0x55BB44))))
+                    dev.menonng.zomapo.cure.Cure.roll(killer, dev.menonng.zomapo.logic.cure.VaccineEnding.ALPHA_SHARD_CHANCE, "alpha")
+                    dev.menonng.zomapo.infection.NationBridge.publish("alpha_slain", mapOf<String, Any?>("nation" to dev.menonng.zomapo.infection.NationBridge.nationOf(killer.uuid)))
+                }
                 clear(level.server, "slain")
             } else if (e is ServerPlayer && e.uuid == r.target) {
                 (level.server.getLevel(r.dim)?.getEntity(r.alpha) as? Zombie)?.let { despawn(level.server, it) } ?: clear(level.server, "target died")

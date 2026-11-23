@@ -23,6 +23,7 @@ object ZomApo : ModInitializer {
         dev.menonng.zomapo.enchant.ZomEnchants.register()
         dev.menonng.zomapo.enchant.StarforceSystem.register()
         dev.menonng.zomapo.ai.ZombieBrain.register()
+        dev.menonng.zomapo.cure.Cure.register()
         ServerLifecycleEvents.SERVER_STARTED.register { server ->
             if (System.getProperty("zomapo.smoke") == "true") {
                 val failures = ZomSmoke.run(server)

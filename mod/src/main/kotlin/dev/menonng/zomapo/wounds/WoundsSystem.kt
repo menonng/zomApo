@@ -199,15 +199,25 @@ object WoundsSystem {
         if (s.bleeding) set(p, s.copy(bleedTicks = 0))
     }
 
-    /** 해독제를 마셨을 때(믹스인 `ConsumableMixin`). */
+    /** 해독제·붕대를 다 썼을 때(믹스인 `ConsumableMixin`). false 면 쓰지 않은 것으로 한다(아이템이 남는다). */
     @JvmStatic
-    fun onConsume(p: ServerPlayer, stack: ItemStack) {
-        if (!ZomItems.isAntidote(stack)) return
+    fun onConsume(p: ServerPlayer, stack: ItemStack): Boolean {
+        if (ZomItems.isBandage(stack)) {
+            if (!state(p).bleeding) {
+                p.sendSystemMessage(Component.literal("피가 나지 않습니다. 붕대는 출혈을 멈출 때 씁니다.").withStyle(ChatFormatting.GRAY), true)
+                return false
+            }
+            stopBleeding(p)
+            p.sendSystemMessage(Component.literal("붕대를 감았습니다. 피가 멎었습니다.").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))), true)
+            return true
+        }
+        if (!ZomItems.isAntidote(stack)) return true
         if (cure(p, Infection.Removal.ANTIDOTE)) {
             p.sendSystemMessage(Component.literal("몸속의 열이 가라앉습니다. 감염이 풀렸습니다.").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x55BB44))))
         } else {
             p.sendSystemMessage(Component.literal("쓴맛만 남습니다. 감염되어 있지 않았습니다.").withStyle(ChatFormatting.GRAY))
         }
+        return true
     }
 
     /** 자연 회복 배율(믹스인 `FoodDataMixin`): 출혈 중 0, 발열·악화 0.5. */
@@ -233,6 +243,7 @@ object WoundsSystem {
                 val h = p.health
                 val target = Bleeding.healthAfterTick(h)
                 if (target < h) p.hurtServer(level, p.damageSources().magic(), h - target)
+                dev.menonng.zomapo.gimmick.NoiseSystem.emit(level, p.position(), dev.menonng.zomapo.logic.effects.Bandage.BLOOD_SMELL_NOISE)   // 피 냄새
             }
             if (now % 10L == 0L) level.sendParticles(BLOOD, p.x, p.y + 0.9, p.z, 2, 0.2, 0.3, 0.2, 0.0)
         }
@@ -245,7 +256,7 @@ object WoundsSystem {
                 if (now % 40L == 0L) level.sendParticles(SPORE, p.x, p.y + 1.5, p.z, 1, 0.25, 0.2, 0.25, 0.0)
                 if ((inf - Infection.WORSENING_AFTER_TICKS) % Infection.COUGH_INTERVAL_TICKS == 0L) {
                     level.playSound(null, p.x, p.y, p.z, SoundEvents.PLAYER_HURT, SoundSource.PLAYERS, 0.5f, 0.55f)
-                    // 소음(기침 16)은 소음 시스템이 들어오면 여기서 보낸다.
+                    dev.menonng.zomapo.gimmick.NoiseSystem.emit(level, p.position(), dev.menonng.zomapo.logic.effects.Bandage.COUGH_NOISE)
                 }
             }
             if (stage != before) {
