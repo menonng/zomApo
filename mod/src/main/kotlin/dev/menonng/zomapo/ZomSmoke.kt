@@ -143,6 +143,86 @@ internal object ZomSmoke {
         f += revenantChecks(server)
         f += nestChecks(server)
         f += enchantChecks(server)
+        f += familyChecks(server)
+        return f
+    }
+
+    /** 몹 좀비화 3·6절: 진홍 브루트 찢는 손톱, 드랍 배율·결정 확률, 피글린 경계, 좀비화 습격(레벨·보스바·환술사), 주민 → 좀비 주민. */
+    private fun familyChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        val sl = dev.menonng.zomapo.infection.SpawnLevels
+        val zf = dev.menonng.zomapo.gimmick.Zombified
+        val pos = net.minecraft.core.BlockPos(5600, 120, 5600)
+        level.getChunk(pos)
+        for (dx in -12..12) for (dz in -4..4) level.setBlockAndUpdate(pos.offset(dx, -1, dz), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
+        val made = mutableListOf<net.minecraft.world.entity.Entity>()
+        fun <T : net.minecraft.world.entity.Mob> spawn(type: net.minecraft.world.entity.EntityType<T>, dx: Double, lv: Int?, reason: net.minecraft.world.entity.EntitySpawnReason = net.minecraft.world.entity.EntitySpawnReason.NATURAL): T {
+            val m = type.create(level, reason)!!
+            m.snapTo(pos.x + 0.5 + dx, pos.y.toDouble(), pos.z + 0.5, 0f, 0f)
+            sl.eventOverride = lv?.let { it to dev.menonng.zomapo.logic.score.SpawnSource.NATURAL }
+            try { m.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), reason, null) } finally { sl.eventOverride = null }
+            level.addFreshEntity(m); made += m
+            return m
+        }
+        try {
+            val brute = spawn(net.minecraft.world.entity.EntityTypes.PIGLIN_BRUTE, 0.0, 4)
+            if (!zf.isZombified(brute)) f += "Lv4 이벤트 브루트가 좀비화되지 않음"
+            else if (!brute.entityTags().contains("zomapo_trait_lacerating")) f += "진홍 브루트에 찢는 손톱이 없음"
+            val sk = spawn(net.minecraft.world.entity.EntityTypes.SKELETON, 0.0, 4)
+            val d = dev.menonng.zomapo.gimmick.ZomDrops
+            if (d.xp(sk, 5) != 7) f += "Lv4 경험치 배율(×1.4)이 아님: ${d.xp(sk, 5)}"
+            if (Math.abs(d.crystalChance(10.0) - 0.2) > 1e-9 || d.crystalChance(100.0) != 0.5) f += "바이러스 결정 확률이 min(50%, 점수×2%) 가 아님"
+            if (server.reloadableRegistries().getLootTable(d.ZOMBIE_LOOT) === net.minecraft.world.level.storage.loot.LootTable.EMPTY) f += "좀비 루트 테이블을 못 찾음"
+            // 거미줄: 진짜 블록이 아니라 표시 엔티티
+            val webPos = pos.offset(3, 0, 3)
+            dev.menonng.zomapo.gimmick.FamilyGimmicks.spawnWeb(level, webPos, level.gameTime + 100)
+            if (!level.getBlockState(webPos).isAir) f += "거미줄이 진짜 블록을 놓음"
+            if (!dev.menonng.zomapo.gimmick.FamilyGimmicks.webAt(level, webPos)) f += "거미줄 표시가 생기지 않음"
+            // 피글린 경계: 8블록 떨어진 좀비화 해골을 피하고, 해골은 피글린을 노린다
+            val piglin = spawn(net.minecraft.world.entity.EntityTypes.PIGLIN, 8.0, null, net.minecraft.world.entity.EntitySpawnReason.COMMAND)
+            sk.target = null
+            dev.menonng.zomapo.gimmick.PiglinWary.tick(level, sk, force = true)
+            if (piglin.brain.getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.AVOID_TARGET).orElse(null) !== sk) f += "피글린이 좀비화 몹을 피할 대상으로 두지 않음"
+            if (sk.target !== piglin) f += "좀비화 몹이 10블록 안 피글린을 노리지 않음"
+            val player = net.fabricmc.fabric.api.entity.FakePlayer.get(level)
+            sk.target = player
+            dev.menonng.zomapo.gimmick.PiglinWary.tick(level, sk, force = true)
+            if (sk.target !== player) f += "쫓던 대상을 피글린으로 바꿈(추적 우선이 아님)"
+            // 좀비화 습격
+            val zr = dev.menonng.zomapo.gimmick.ZombifiedRaid
+            val raid = net.minecraft.world.entity.raid.Raid(pos, net.minecraft.world.Difficulty.NORMAL)
+            zr.markForTest(raid, 3)
+            val pil = net.minecraft.world.entity.EntityTypes.PILLAGER.create(level, net.minecraft.world.entity.EntitySpawnReason.EVENT)!!
+            val groups = (raid as dev.menonng.zomapo.mixin.RaidAccessor).`zomapo$numGroups`()
+            pil.setCurrentRaid(raid); pil.wave = groups
+            pil.snapTo(pos.x + 0.5, pos.y.toDouble(), pos.z + 2.5, 0f, 0f)
+            pil.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), net.minecraft.world.entity.EntitySpawnReason.EVENT, null)
+            level.addFreshEntity(pil); made += pil
+            if (!zf.isZombified(pil)) f += "Lv3 습격의 약탈자가 좀비화되지 않음"
+            if (zr.barName(raid, net.minecraft.network.chat.Component.literal("Raid")).string != "좀비화 습격") f += "좀비화 습격 보스바 이름이 아님"
+            zr.spawnPending()
+            val ill = raid.allRaiders.firstOrNull { it is net.minecraft.world.entity.monster.illager.Illusioner }
+            if (ill == null) f += "마지막 웨이브에 거울 환술사가 더해지지 않음" else { made += ill; if (!zf.isZombified(ill)) f += "습격 환술사가 좀비화되지 않음" }
+            val raid2 = net.minecraft.world.entity.raid.Raid(pos, net.minecraft.world.Difficulty.NORMAL)
+            zr.markForTest(raid2, 2)
+            val pil2 = net.minecraft.world.entity.EntityTypes.PILLAGER.create(level, net.minecraft.world.entity.EntitySpawnReason.EVENT)!!
+            pil2.setCurrentRaid(raid2); pil2.wave = 1
+            pil2.snapTo(pos.x + 0.5, pos.y.toDouble(), pos.z - 2.5, 0f, 0f)
+            pil2.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), net.minecraft.world.entity.EntitySpawnReason.EVENT, null)
+            if (zf.isZombified(pil2)) f += "Lv2 습격의 약탈자가 좀비화됨"
+            // 주민 → 좀비 주민(어려움)
+            val diff = level.difficulty
+            server.setDifficulty(net.minecraft.world.Difficulty.HARD, true)
+            try {
+                val v = spawn(net.minecraft.world.entity.EntityTypes.VILLAGER, -6.0, null, net.minecraft.world.entity.EntitySpawnReason.COMMAND)
+                v.hurtServer(level, level.damageSources().mobAttack(sk), 1000f)
+                val zv = level.getEntitiesOfClass(net.minecraft.world.entity.monster.zombie.ZombieVillager::class.java, sk.boundingBox.inflate(16.0))
+                if (zv.isEmpty()) f += "좀비화 몹에게 죽은 주민이 좀비 주민이 되지 않음"
+                made += zv
+            } finally { server.setDifficulty(diff, true) }
+        } catch (t: Throwable) { f += "몹 좀비화 검사 중 예외: $t" }
+        finally { for (e in made) e.discard() }
         return f
     }
 

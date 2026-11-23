@@ -6,13 +6,16 @@
   "mixins": [
     "AlphaZombieMixin",
     "ArrowAccessor",
+    "BlockDisplayInvoker",
     "ConsumableMixin",
+    "CreeperSporeMixin",
     "DeathLootMixin",
     "DisplayInvoker",
     "EndermanTeleportMixin",
     "EntityAccessor",
     "FoodDataMixin",
     "GameEventNoiseMixin",
+    "HoglinFleeMixin",
     "IngredientMixin",
     "InteractionInvoker",
     "ItemDisplayInvoker",
@@ -25,12 +28,16 @@
     "PhantomRiderMixin",
     "PoisonTickMixin",
     "PrismarineDamageMixin",
+    "RaidAccessor",
+    "RaidNameMixin",
+    "RaidsAccessor",
     "RevenantRestMixin",
     "RevenantZombieMixin",
     "ShulkerInvoker",
     "WitherTickMixin",
     "WoundHeartsMixin",
-    "ZomDamageMixin"
+    "ZomDamageMixin",
+    "ZomLootMixin"
   ],
   "injectors": {
     "defaultRequire": 1

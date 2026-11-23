@@ -23,7 +23,7 @@ object VibrationNoise {
         val key = event.unwrapKey().map { it.identifier().path }.orElse(null) ?: return
         val src = ctx.sourceEntity()
         val player = (src as? Player) ?: ((src as? Projectile)?.owner as? Player)
-        if (player == null && key !in ALWAYS) return
+        if (player == null && key !in ALWAYS && src !is net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge) return
         if (player != null && (player.isSpectator || player.isCreative)) return
         val stepLike = key == "step" || key == "hit_ground" || key == "swim"
         if (stepLike && player != null) {
@@ -32,7 +32,9 @@ object VibrationNoise {
             if ((lastStep[player.uuid] ?: Long.MIN_VALUE) > now - 20) return
             lastStep[player.uuid] = now
         }
-        val r = Vibrations.radius(key, sprinting = player?.isSprinting == true) ?: return
+        // 돌풍구 터짐은 게임 이벤트로는 폭발(48)이지만 소리 크기에 맞춰 16(4-2)
+        val r = if (key == "explode" && src is net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge) Vibrations.WIND_CHARGE
+            else Vibrations.radius(key, sprinting = player?.isSprinting == true) ?: return
         NoiseSystem.emit(level, pos, r)
     }
 }

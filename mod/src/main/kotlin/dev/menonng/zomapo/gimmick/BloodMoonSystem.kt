@@ -169,6 +169,7 @@ object BloodMoonSystem {
             r.pending += Triple(now, site, a)
             r.pending += Triple(now + 300, site, b)
         }
+        if (wave == 3) r.sites.filter { !it.failed }.randomOrNull()?.let { spawnIllusioner(s, it) }   // 거울 환술사 최대 1마리(3절 표)
         if (wave == 3 && !r.alphaDone) {
             r.alphaDone = true
             val lv4 = r.sites.filter { !it.failed && levelOf(s, it)?.let { l -> LevelRules.level(Infection.levelAt(l, it.x.toDouble(), it.z.toDouble())) >= 4 } == true }
@@ -198,6 +199,31 @@ object BloodMoonSystem {
                 zmb.addTag(TAG)
                 Memory.acquire(zmb, MemoryReason.BLOODMOON)
                 if (level.addFreshEntity(zmb)) { site.zombies += zmb.uuid; made++ }
+            }
+        } finally { SpawnLevels.eventOverride = null }
+    }
+
+    private fun spawnIllusioner(s: MinecraftServer, site: Site) {
+        val level = levelOf(s, site) ?: return
+        val lv = BloodMoon.spawnLevel(LevelRules.level(Infection.levelAt(level, site.x.toDouble(), site.z.toDouble()))).coerceAtLeast(3)
+        SpawnLevels.eventOverride = lv to SpawnSource.BLOODMOON
+        try {
+            repeat(8) {
+                val a = level.random.nextDouble() * Math.PI * 2
+                val rr = BloodMoon.SPAWN_MIN + level.random.nextDouble() * (BloodMoon.SPAWN_MAX - BloodMoon.SPAWN_MIN)
+                val x = (site.x + Math.cos(a) * rr).toInt(); val z = (site.z + Math.sin(a) * rr).toInt()
+                level.getChunk(x shr 4, z shr 4)
+                val y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+                val pos = BlockPos(x, y, z)
+                if (!level.getBlockState(pos.below()).isSolid || !level.getBlockState(pos).isAir) return@repeat
+                val ill = EntityTypes.ILLUSIONER.create(level, EntitySpawnReason.EVENT) ?: return
+                ill.snapTo(x + 0.5, y.toDouble(), z + 0.5, 0f, 0f)
+                ill.finalizeSpawn(level, level.getCurrentDifficultyAt(pos), EntitySpawnReason.EVENT, null)
+                if (!Zombified.isZombified(ill)) { Zombified.mark(ill, lv); SpawnLevels.stamp(ill, lv, SpawnSource.BLOODMOON) }
+                ill.addTag(TAG)
+                Memory.acquire(ill, MemoryReason.BLOODMOON)
+                if (level.addFreshEntity(ill)) site.zombies += ill.uuid
+                return
             }
         } finally { SpawnLevels.eventOverride = null }
     }

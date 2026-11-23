@@ -62,6 +62,8 @@ object Zombified {
         IllagerPatrol.register()
         AlphaSystem.register()
         VariantSystem.register()
+        FamilyGimmicks.register()
+        ZombifiedRaid.register()
         HordeSystem.register()
         BloodMoonSystem.register()
         Nests.register()
@@ -94,6 +96,8 @@ object Zombified {
                 is Pillager -> { IllagerPatrol.tick(level, mob); VindicatorAxe.cover(mob) }
                 is AbstractIllager -> VindicatorAxe.cover(mob)
             }
+            FamilyGimmicks.tick(level, mob)
+            PiglinWary.tick(level, mob)
             Motion.track(level, mob)
             RigSystem.tick(level, mob)
         }

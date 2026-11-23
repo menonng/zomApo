@@ -79,7 +79,9 @@ object SpawnLevels {
     fun onFinalizeSpawn(mob: Mob, reason: EntitySpawnReason) {
         val level = mob.level() as? ServerLevel ?: return
         val override = eventOverride
-        val lv = override?.first ?: LevelRules.level(Infection.levelAt(level, mob.x, mob.z))
+        // 습격자: 습격 중심 청크 레벨(습격마다 한 번 본다, 3-3)
+        val raidLv = if (override == null && reason == EntitySpawnReason.EVENT) dev.menonng.zomapo.gimmick.ZombifiedRaid.raidLevel(level, mob) else null
+        val lv = override?.first ?: raidLv ?: LevelRules.level(Infection.levelAt(level, mob.x, mob.z))
         val src = override?.second ?: when (reason) {
             EntitySpawnReason.SPAWNER -> if (dev.menonng.zomapo.gimmick.Nests.near(level.dimension().identifier().toString(), mob.x, mob.z, 8.0) != null) SpawnSource.NEST else SpawnSource.SPAWNER
             EntitySpawnReason.TRIAL_SPAWNER -> SpawnSource.TRIAL
@@ -92,7 +94,10 @@ object SpawnLevels {
                 if (reason == EntitySpawnReason.REINFORCEMENT) inheritFromNearby(mob)
                 else { stamp(mob, lv, src); if (reason != EntitySpawnReason.COMMAND) dev.menonng.zomapo.gimmick.VariantSystem.roll(mob, lv) }
             }
-            Zombification.shouldZombify(entityId, lv, org) -> { Zombified.mark(mob, lv); stamp(mob, lv, src) }
+            Zombification.shouldZombify(entityId, lv, org) -> {
+                Zombified.mark(mob, lv); stamp(mob, lv, src)
+                if (raidLv != null) dev.menonng.zomapo.gimmick.ZombifiedRaid.afterRaiderZombified(level, mob)
+            }
             else -> return
         }
     }
@@ -106,6 +111,7 @@ object SpawnLevels {
         mob.setAttached(SPAWN_LEVEL, lv)
         mob.setAttached(SOURCE, src.ordinal)
         applyBuffs(mob, lv)
+        dev.menonng.zomapo.gimmick.FamilyGimmicks.rollTraits(mob, lv)
         tracked += mob
     }
 
@@ -205,6 +211,7 @@ object SpawnLevels {
         val decay = farm.record(killer.uuid, m.level().dimension().identifier().toString(), m.blockPosition().x, m.blockPosition().z, now)
         val ctx = KillContext(base, (spawnLevel(m) ?: 0).toDouble(), source(m), 1.0, environmentOnly = false)
         Infection.addKill(killer.uuid, ZombieScore.raw(ctx) * decay, ZombieScore.forHeat(ctx) * decay)
+        dev.menonng.zomapo.gimmick.ZomDrops.maybeCrystal(m, ZombieScore.raw(ctx) * decay)
         val form = when {
             m.entityTags().contains("zomapo_alpha") -> "alpha"
             m.getAttached(VariantTag.VARIANT) != null -> m.getAttached(VariantTag.VARIANT)!!.lowercase()
