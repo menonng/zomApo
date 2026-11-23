@@ -197,6 +197,7 @@ object RevenantSystem {
                 list += EntryData(out.entry.id, out.entry.dimension, out.entry.x, out.entry.y, out.entry.z, now, now, items, xp)
                 spawnEntity(p, level, at, out.entry.id, items)
                 dev.menonng.zomapo.stats.ZombieStats.rec(p.uuid).revenantsCreated++
+                dev.menonng.zomapo.infection.NationBridge.publish("revenant_created", mapOf("owner" to p.uuid.toString(), "nation" to dev.menonng.zomapo.infection.NationBridge.nationOf(p.uuid)))   // 좌표는 보내지 않는다
             }
         }
         p.setAttached(STASH, StashData(list, logic.nextId, logic.lastCountedRecoveryMillis))

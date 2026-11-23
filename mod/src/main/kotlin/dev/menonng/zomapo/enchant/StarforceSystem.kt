@@ -152,7 +152,7 @@ object StarforceSystem {
                     ZombieStats.rec(p.uuid).let { if (r.newStar > it.maxStar) it.maxStar = r.newStar }
                     if (r.newStar >= sf.config.maxStar) {
                         p.level().server.playerList.broadcastSystemMessage(Component.literal("${p.scoreboardName}님이 ${r.newStar}성 강화를 달성했습니다.").withStyle(Style.EMPTY.withColor(YELLOW)), false)
-                        dev.menonng.zomapo.infection.NationBridge.publish("starforce_max", mapOf("star" to r.newStar))
+                        dev.menonng.zomapo.infection.NationBridge.publish("starforce_max", mapOf("star" to r.newStar, "player" to p.uuid.toString(), "item" to t.hoverName.string))
                     }
                 }
                 Outcome.KEEP -> { lvl.playSound(null, p.blockPosition(), SoundEvents.ANVIL_LAND, SoundSource.PLAYERS, 0.6f, 1f); p.sendSystemMessage(Component.literal("실패했습니다. 성은 그대로이고 결정 ${r.refundCrystals}개를 돌려받았습니다."), true) }
