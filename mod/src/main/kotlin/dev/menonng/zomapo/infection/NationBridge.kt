@@ -24,6 +24,7 @@ object NationBridge {
     fun markProtected(player: UUID, until: Long) { if (present) runCatching { SnwLink.markProtected(player, until) } }
     fun grantJoinProtection(player: UUID): Boolean = !present || runCatching { SnwLink.grantJoinProtection(player) }.getOrDefault(true)
     fun setScoreSource(f: (UUID) -> Double) { if (present) runCatching { SnwLink.setScoreSource(f) } }
+    fun setLevelSource(f: (String, Int, Int) -> Int) { if (present) runCatching { SnwLink.setLevelSource(f) } }
     fun core(nation: String): CoreInfo? = if (present) runCatching { SnwLink.core(nation) }.getOrNull() else null
     fun publish(type: String, data: Map<String, Any?>) { if (present) runCatching { SnwLink.publish(type, data) } }
     fun subscribe(type: String, f: (Map<String, Any?>) -> Unit) { if (present) runCatching { SnwLink.subscribe(type, f) } }

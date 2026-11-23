@@ -27,6 +27,7 @@ internal object SnwLink {
     fun markProtected(p: UUID, until: Long) = api().markProtected(p, until)
     fun grantJoinProtection(p: UUID): Boolean = api().grantJoinProtection(p)
     fun setScoreSource(f: (UUID) -> Double) = api().setZombieScoreSource(f)
+    fun setLevelSource(f: (String, Int, Int) -> Int) = api().setInfectionLevelSource(f)
     fun core(n: String): NationBridge.CoreInfo? = api().core(NationId(n))?.let(::toInfo)
     fun subscribe(type: String, f: (Map<String, Any?>) -> Unit) = api().eventBus().subscribe(type) { f(it.data) }
     fun publish(type: String, data: Map<String, Any?>) = api().eventBus().publish(ServerEvent(type, System.currentTimeMillis(), data))

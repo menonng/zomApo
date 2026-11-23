@@ -33,6 +33,8 @@ interface NationApi {
     fun markProtected(player: UUID, untilEpochMillis: Long) {}
     /** 다시 들어올 때 zomApo 접속 보호(10초)를 줄지(좀비에게 맞고 10초 안에 나갔으면 false). 한 번 묻고 나면 지운다. */
     fun grantJoinProtection(player: UUID): Boolean = true
+    /** 청크의 감염 레벨(정수 0~5, zomApo 가 넣는다). 국가 창 영토 지도의 칸 색에 쓴다. 인자: 차원 id, 청크 x, 청크 z. */
+    fun setInfectionLevelSource(source: (String, Int, Int) -> Int) {}
     /** 영토 상한의 좀비 스코어 항에 쓸 값(zomApo 가 넣는다). */
     fun setZombieScoreSource(source: (UUID) -> Double) {}
 

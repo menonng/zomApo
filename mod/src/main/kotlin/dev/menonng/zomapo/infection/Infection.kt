@@ -217,6 +217,10 @@ object Infection {
         ServerLifecycleEvents.SERVER_STARTED.register { s ->
             load(s); recompute(s)
             NationBridge.setScoreSource { score(it) }
+            // 국가 창 영토 지도의 칸 색(snw)
+            NationBridge.setLevelSource { dim, cx, cz ->
+                s.allLevels.firstOrNull { it.dimension().identifier().toString() == dim }?.let { LevelRules.level(levelAt(it, cx * 16 + 8.0, cz * 16 + 8.0)) } ?: 0
+            }
             // 시즌 시작 명령(snw)이 그날을 전역 램프 0일째로
             NationBridge.subscribe("season_start") { d ->
                 (d["date"] as? String)?.let { runCatching { ZomConfig.setSeasonStart(LocalDate.parse(it)) } }
