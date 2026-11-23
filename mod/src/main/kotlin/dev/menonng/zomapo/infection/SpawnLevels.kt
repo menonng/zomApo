@@ -81,7 +81,7 @@ object SpawnLevels {
         val override = eventOverride
         val lv = override?.first ?: LevelRules.level(Infection.levelAt(level, mob.x, mob.z))
         val src = override?.second ?: when (reason) {
-            EntitySpawnReason.SPAWNER -> SpawnSource.SPAWNER
+            EntitySpawnReason.SPAWNER -> if (dev.menonng.zomapo.gimmick.Nests.near(level.dimension().identifier().toString(), mob.x, mob.z, 8.0) != null) SpawnSource.NEST else SpawnSource.SPAWNER
             EntitySpawnReason.TRIAL_SPAWNER -> SpawnSource.TRIAL
             else -> SpawnSource.NATURAL
         }
@@ -168,7 +168,7 @@ object SpawnLevels {
             val lv = Infection.displayLevel(level, p.x, p.z)
             val rate = if (day) LevelRules.dayZombieRate(lv) else LevelRules.nightZombieRate(lv) - 1.0
             if (rate <= 0) continue
-            val expected = rate * BASE_PER_MINUTE / 6.0
+            val expected = rate * BASE_PER_MINUTE / 6.0 * LoadGuard.factor
             if (level.random.nextDouble() >= expected) continue
             val near = level.getEntitiesOfClass(Mob::class.java, p.boundingBox.inflate(64.0)) { isZombieLike(it) }.size
             if (near >= LOCAL_CAP) continue

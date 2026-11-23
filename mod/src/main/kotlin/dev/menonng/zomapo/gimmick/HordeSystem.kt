@@ -50,7 +50,7 @@ object HordeSystem {
                 ticksSinceLastHorde = now - (lastHorde[p.uuid] ?: Long.MIN_VALUE / 2), afk = NationBridge.isAfk(p.uuid))
         }
         val out = Horde.attempt(Random(level.random.nextLong()), cands) ?: return
-        start(level, UUID.fromString(out.target), out.level, out.size)
+        start(level, UUID.fromString(out.target), out.level, Math.max(5, Math.round(out.size * dev.menonng.zomapo.infection.LoadGuard.factor).toInt()))
     }
 
     /** 떼 시작(운영자 명령도 부른다). 5초 전 먼 울음소리, 두 무리 15초 간격. */

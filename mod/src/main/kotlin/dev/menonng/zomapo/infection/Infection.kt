@@ -49,6 +49,8 @@ object Infection {
         val netherExplored: MutableSet<Long> = linkedSetOf(),
         var permanentReduction: Double = 0.0,
         val events: MutableList<PurifyEvent> = mutableListOf(),
+        /** 06:00 마다 국가 영토 레벨 기록(날짜 → 국가 → 레벨). 접속 안내 '어제'에 쓴다. */
+        val daily: MutableMap<String, MutableMap<String, Double>> = linkedMapOf(),
     )
     var data = Saved()
         private set
@@ -133,6 +135,8 @@ object Infection {
                 }
             }
         }
+        val nearNest = dev.menonng.zomapo.gimmick.Nests.near(d, x, z, dev.menonng.zomapo.gimmick.Nests.MIN_LEVEL_RADIUS) != null
+        if (nearNest) return areaEvents(d, cx, cz, model.clamp(maxOf(raw, model.config.nestMinimum)))
         val nearLandmark = landmarks.any { it.dimension == d && hypot(it.x - x, it.z - z) <= LANDMARK_RADIUS }
         return areaEvents(d, cx, cz, model.clamp(if (nearLandmark) raw + model.config.landmarkBonus else raw))
     }
@@ -196,13 +200,34 @@ object Infection {
         }
     }
 
-    private fun levelColor(lv: Int): Int = when (lv) { 0, 1 -> 0x55BB44; 2, 3 -> 0x660099; else -> 0xFF0045 }
+    /** 색상(7절): Lv0~2 초록, Lv3~4 보라, Lv5 빨강(국가 색과 겹치는 빨강은 Lv5 경고에만). */
+    fun levelColor(lv: Int): Int = when { lv <= 2 -> 0x55BB44; lv <= 4 -> 0x660099; else -> 0xFF0045 }
 
     /** 경계를 넘을 때 액션바(정수 레벨이 바뀔 때만). */
     private fun show(p: ServerPlayer) {
         val lv = displayLevel(p.level(), p.x, p.z)
         if (lastShown.put(p.uuid, lv) == lv) return
-        p.sendSystemMessage(Component.literal("감염 Lv$lv").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(levelColor(lv)))), true)
+        p.sendSystemMessage(Component.literal("감염 지역 Lv$lv").withStyle(Style.EMPTY.withColor(TextColor.fromRgb(levelColor(lv)))), true)
+    }
+
+    /** 매일 06:00: 국가별 영토 레벨을 남기고 디스코드 상태 채널용 사건을 낸다. */
+    private fun dailySnapshot(s: MinecraftServer) {
+        val now = java.time.LocalDateTime.now(zone)
+        val key = now.toLocalDate().toString()
+        if (now.hour < 6 || data.daily.containsKey(key)) return
+        recompute(s)
+        data.daily[key] = nationLevels.toMutableMap()
+        data.daily.keys.toList().dropLast(10).forEach { data.daily.remove(it) }
+        NationBridge.publish("infection_daily", mapOf("ramp" to ramp, "wild" to wild, "nations" to nationLevels))
+    }
+
+    /** 접속할 때 채팅 1줄: 오늘 우리 영토 감염도 2.8 (어제 2.5). */
+    private fun joinLine(p: ServerPlayer) {
+        val n = NationBridge.nationOf(p.uuid) ?: return
+        val today = nationLevels[n] ?: return
+        val yesterday = data.daily.entries.toList().dropLast(1).lastOrNull()?.value?.get(n)
+        p.sendSystemMessage(Component.literal("오늘 우리 영토 감염도 ${"%.1f".format(today)}${yesterday?.let { " (어제 ${"%.1f".format(it)})" } ?: ""}")
+            .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(levelColor(LevelRules.level(today))))))
     }
 
     fun load(s: MinecraftServer) {
@@ -244,10 +269,12 @@ object Infection {
         ServerTickEvents.END_SERVER_TICK.register { s ->
             tick++
             if (tick % 20 == 0) for (p in s.playerList.players) { markNether(p); show(p) }
-            if (tick % 1200 == 0) minute(s)
+            if (tick % 1200 == 0) { minute(s); dailySnapshot(s) }
             if (tick % 6000 == 0) save(s)
         }
         SpawnLevels.register()
+        LoadGuard.register()
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register { h, _, _ -> joinLine(h.player) }
     }
 
     @Suppress("unused") private fun sq(v: Double) = sqrt(v)

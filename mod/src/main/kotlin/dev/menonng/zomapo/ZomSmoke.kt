@@ -141,6 +141,29 @@ internal object ZomSmoke {
         z4.discard()
         f += aiChecks(server)
         f += revenantChecks(server)
+        f += nestChecks(server)
+        return f
+    }
+
+    /** 감염 둥지: 짓기·최소 Lv3·스포너가 사라지면 파괴 처리(정화 이벤트). 부하 연동 문턱. */
+    private fun nestChecks(server: MinecraftServer): List<String> {
+        val f = mutableListOf<String>()
+        val level = server.overworld()
+        val ns = dev.menonng.zomapo.gimmick.Nests
+        val pos = net.minecraft.core.BlockPos(5300, 120, 5300)
+        level.getChunk(pos)
+        for (dx in -3..3) for (dz in -3..3) level.setBlockAndUpdate(pos.offset(dx, -2, dz), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
+        val n = ns.build(level, pos, null)
+        if (!level.getBlockState(pos).`is`(net.minecraft.world.level.block.Blocks.SPAWNER)) f += "둥지 스포너가 없음"
+        if (dev.menonng.zomapo.infection.Infection.levelAt(level, 5300.0, 5300.0) < 3.0) f += "둥지 근처가 Lv3 미만"
+        val events = dev.menonng.zomapo.infection.Infection.data.events.size
+        level.setBlockAndUpdate(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState())
+        ns.second(server)
+        if (ns.state.nests.any { it.id == n.id }) f += "스포너가 사라졌는데 둥지가 남음"
+        if (dev.menonng.zomapo.infection.Infection.data.events.size != events + 1) f += "둥지 파괴 정화가 생기지 않음"
+        dev.menonng.zomapo.infection.Infection.data.events.removeIf { it.dimension == "minecraft:overworld" && it.cx == 5300 shr 4 }
+        val lg = dev.menonng.zomapo.infection.LoadGuard
+        if (lg.target(30.0) != 1.0 || lg.target(40.0) != 0.8 || lg.target(50.0) != 0.6) f += "부하 연동 문턱이 문서와 다름"
         return f
     }
 

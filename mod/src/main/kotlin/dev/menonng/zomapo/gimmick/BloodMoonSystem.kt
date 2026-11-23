@@ -164,7 +164,7 @@ object BloodMoonSystem {
         for (site in r.sites) {
             if (site.failed) continue
             val p = participantsIn(s, site).size.coerceAtLeast(1)
-            val size = BloodMoon.waveSize(p, wave)
+            val size = BloodMoon.waveSize(p, wave, dev.menonng.zomapo.infection.LoadGuard.factor)
             val (a, b) = BloodMoon.split(size)
             r.pending += Triple(now, site, a)
             r.pending += Triple(now + 300, site, b)
