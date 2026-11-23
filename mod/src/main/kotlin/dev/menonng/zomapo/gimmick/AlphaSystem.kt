@@ -62,7 +62,7 @@ import kotlin.random.Random
 /**
  * 알파: 서버에 하나뿐인 추적자. docs/design/zombies.md '몹 좀비화' 7-1, 규칙 숫자는 logic 의 AlphaRules.
  * - 10분(±3분)마다, 잠수 아닌 접속자가 3명 이상이고 알파가 없으면 1/120. 잠수 아닌 오버월드 접속자 중 무작위 한 명이 대상.
- *   대상에게서 256~512블록 고리 위 땅에 처음부터 실제 몹(좀비, 크기 1.25, 체력 120, 넉백 저항 0.5, 금 간 금관)으로 생긴다.
+ *   대상에게서 256~512블록 고리 위 땅에 처음부터 실제 몹(좀비, 크기 1.25, 체력 120, 넉백 저항 0.5, 돌연변이 머리)으로 생긴다.
  *   알림은 대상에게만(액션바 + 먼 울음소리, 다가올수록 잦아짐). 무지개 발광 테두리도 대상에게만 보낸다(팀 패킷 + 발광 비트).
  * - 늘 초속 5.6블록: 바닐라 이동 속도는 0 으로 두고 우리가 매 틱 같은 거리만큼 직접 옮긴다(충돌·1블록 오르기는 바닐라 move,
  *   거미줄 감속은 지운다, 물·영혼 모래·구속·넉백과 상관없음). 대상 쪽 32블록 경유점까지 바닐라 길찾기 경로를 따른다.
@@ -75,7 +75,7 @@ import kotlin.random.Random
 object AlphaSystem {
     const val TAG = "zomapo_alpha"
     const val ALPHA_SCORE = 25.0
-    private val CROWN = Identifier.fromNamespaceAndPath("zomapo", "head/alpha_crown")
+    private val HEAD_MODEL = Identifier.fromNamespaceAndPath("zomapo", "head/alpha_mutation")
 
     private class Run(var alpha: UUID, var target: UUID, var dim: ResourceKey<Level>, var pos: Vec3) {
         var path: Path? = null
@@ -133,7 +133,7 @@ object AlphaSystem {
         a.getAttribute(Attributes.STEP_HEIGHT)?.baseValue = 1.0
         a.getAttribute(Attributes.SPAWN_REINFORCEMENTS_CHANCE)?.baseValue = 0.0
         a.setCanPickUpLoot(false)
-        a.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.PAPER).also { it.set(DataComponents.ITEM_MODEL, CROWN) })   // 머리에 무언가 있으면 햇빛에 타지 않는다
+        a.setItemSlot(EquipmentSlot.HEAD, ItemStack(Items.PAPER).also { it.set(DataComponents.ITEM_MODEL, HEAD_MODEL) })   // 머리에 무언가 있으면 햇빛에 타지 않는다
         a.setDropChance(EquipmentSlot.HEAD, 0f)
         a.addTag(TAG)
         a.setPersistenceRequired()
