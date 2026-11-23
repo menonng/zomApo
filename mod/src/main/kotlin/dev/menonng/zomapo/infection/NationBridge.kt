@@ -16,6 +16,8 @@ object NationBridge {
     fun nations(): List<NationInfo> = if (present) runCatching { SnwLink.nations() }.getOrDefault(emptyList()) else emptyList()
     fun nationOf(player: UUID): String? = if (present) runCatching { SnwLink.nationOf(player) }.getOrNull() else null
     fun ownerOf(dimension: String, cx: Int, cz: Int): String? = if (present) runCatching { SnwLink.ownerOf(dimension, cx, cz) }.getOrNull() else null
+    /** 커스텀 닉네임(없으면 null). */
+    fun nickname(player: UUID): String? = if (present) runCatching { SnwLink.nickname(player) }.getOrNull() else null
     fun isAfk(player: UUID): Boolean = present && runCatching { SnwLink.isAfk(player) }.getOrDefault(false)
     fun allied(a: String, b: String): Boolean = present && runCatching { SnwLink.allied(a, b) }.getOrDefault(false)
     fun setTruce(active: Boolean, cores: List<CoreInfo>, radius: Double) { if (present) runCatching { SnwLink.setTruce(active, cores, radius) } }

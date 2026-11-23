@@ -205,7 +205,7 @@ object RevenantSystem {
         z.isBaby = false
         z.addTag(TAG)
         z.setAttached(OWNER, p.uuid.toString()); z.setAttached(REV_ID, id)
-        z.customName = Component.literal("망자 · ${p.scoreboardName}")
+        z.customName = Component.literal("망자 · ${dev.menonng.zomapo.infection.NationBridge.nickname(p.uuid) ?: p.scoreboardName}")
         z.isCustomNameVisible = true
         z.setPersistenceRequired()
         z.setCanPickUpLoot(false)

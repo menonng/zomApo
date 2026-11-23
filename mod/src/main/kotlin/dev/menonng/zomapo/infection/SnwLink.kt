@@ -20,6 +20,7 @@ internal object SnwLink {
     fun nationOf(p: UUID): String? = api().nationOf(p)?.id?.value
     fun ownerOf(d: String, x: Int, z: Int): String? = api().ownerOf(ChunkKey(d, x, z))?.id?.value
     fun isAfk(p: UUID): Boolean = api().isAfk(p)
+    fun nickname(p: UUID): String? = api().nickname(p)
     fun allied(a: String, b: String): Boolean = api().relation(NationId(a), NationId(b)) == Relation.ALLIED
     fun setTruce(active: Boolean, cores: List<NationBridge.CoreInfo>, radius: Double) =
         api().setTruce(active, cores.map { CoreView(NationId(it.nation), it.dimension, it.x, it.y, it.z, it.hp, 100_000.0) }, radius)
