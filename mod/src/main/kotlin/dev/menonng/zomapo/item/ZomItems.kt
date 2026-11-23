@@ -52,6 +52,7 @@ object ZomItems {
 
     /** 해독제: 물약의 이름은 클라이언트가 potion_contents 로 정하므로(item_name 무시) 물약 이름 키를 쓴다. */
     fun antidote(count: Int = 1): ItemStack = ItemStack(Items.POTION, count).apply {
+        set(DataComponents.MAX_STACK_SIZE, 16)                                                                   // 한 번에 3병씩 만들므로 쌓이게
         set(DataComponents.POTION_CONTENTS, PotionContents(Optional.empty(), Optional.of(Antidote.COLOR), listOf(), Optional.of(Antidote.POTION_NAME)))
         set(DataComponents.CUSTOM_MODEL_DATA, CustomModelData(listOf(), listOf(), listOf(Antidote.MODEL), listOf()))
         set(DataComponents.TOOLTIP_DISPLAY, TooltipDisplay(false, linkedSetOf(DataComponents.POTION_CONTENTS)))   // 바닐라 "효과 없음" 대신
@@ -82,5 +83,14 @@ object ZomItems {
             .hasConsumeParticles(false)
             .build())
         set(DataComponents.CUSTOM_DATA, tag(BANDAGE))
+    }
+
+    /** zomApo 조합법(해독제·붕대)은 접속할 때 늘 해금해 레시피북 맨 위에 보이게 한다(RecipeOrderMixin 이 번호를 맨 앞으로). */
+    val RECIPES: List<net.minecraft.resources.ResourceKey<net.minecraft.world.item.crafting.Recipe<*>>> = listOf("antidote_crafting", "bandage_crafting").map {
+        net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.RECIPE, net.minecraft.resources.Identifier.fromNamespaceAndPath("zomapo", it))
+    }
+
+    fun register() {
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register { h, _, _ -> h.player.awardRecipesByKey(RECIPES) }
     }
 }

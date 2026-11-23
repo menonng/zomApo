@@ -116,12 +116,13 @@ object Antidote {
         if (brewing) BREW_HONEY.toDouble() / BREW_OUTPUT else CRAFT_HONEY.toDouble() / CRAFT_OUTPUT
 }
 
-/** 붕대(player.md '출혈'): 종이 1 + 실 1 → 2, 쓰는 데 1.5초, 출혈을 멈춘다. 출혈이 없으면 쓰이지 않는다. */
+/** 붕대(player.md '출혈'): 양털 1 → 4(2026-11-23, 바닐라 블록만), 쓰는 데 1.5초, 출혈을 멈춘다. 출혈이 없으면 쓰이지 않는다. */
 object Bandage {
     const val MODEL = "zomapo:bandage"
     const val NAME_KEY = "item.zomapo.bandage"
     const val CONSUME_SECONDS = 1.5f
-    const val CRAFT_OUTPUT = 2
+    /** 2026-11-23: 조합법은 바닐라 블록만 — 양털(아무 색) 1 → 붕대 4. */
+    const val CRAFT_OUTPUT = 4
     /** 출혈 피 냄새 소음 반경(5초마다), 기침 소음 반경. */
     const val BLOOD_SMELL_NOISE = 24
     const val COUGH_NOISE = 16

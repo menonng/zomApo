@@ -29,37 +29,23 @@ internal object ZomSmoke {
         val level = server.overworld()
         f += infectionChecks(server)
         val rm = server.recipeManager
-        val water = PotionContents.createItemStack(Items.POTION, Potions.WATER)
-        val awkward = PotionContents.createItemStack(Items.POTION, Potions.AWKWARD)
-        val carrot = ItemStack(Items.GOLDEN_CARROT)
-
-        val honey = ItemStack(Items.HONEY_BOTTLE)
-        val melon = ItemStack(Items.GLISTERING_MELON_SLICE)
-        val flesh = ItemStack(Items.ROTTEN_FLESH)
-
+        // 해독제(2026-11-23): 바닐라 블록만 — 꿀 블록 + 수박|호박 + 이끼 블록 → 3병. 양조법은 없앴다(물병이 블록이 아니다).
         val craft = rm.byKey(key("zomapo", "antidote_crafting")).orElse(null)?.value() as? CraftingRecipe
         if (craft == null) f += "해독제 제작 조합법 없음" else {
-            for (gold in listOf(melon, carrot)) {
-                val input = CraftingInput.of(2, 2, listOf(honey, gold, flesh, ItemStack.EMPTY))
-                if (!craft.matches(input, level)) f += "제작 조합법이 맞지 않음(${gold.item})"
-                else if (!ItemStack.isSameItemSameComponents(craft.assemble(input), ZomItems.antidote())) f += "제작 결과물 부품 불일치: ${craft.assemble(input).components}"
+            for (gourd in listOf(Items.MELON, Items.PUMPKIN)) {
+                val input = CraftingInput.of(2, 2, listOf(ItemStack(Items.HONEY_BLOCK), ItemStack(gourd), ItemStack(Items.MOSS_BLOCK), ItemStack.EMPTY))
+                if (!craft.matches(input, level)) f += "제작 조합법이 맞지 않음($gourd)"
+                else { val out = craft.assemble(input); if (out.count != 3 || !ItemStack.isSameItemSameComponents(out, ZomItems.antidote())) f += "제작 결과물 불일치: ${out.count} ${out.components}" }
             }
-            if (craft.matches(CraftingInput.of(2, 2, listOf(honey, melon, ItemStack.EMPTY, ItemStack.EMPTY)), level)) f += "썩은 살 없이 제작됨"
+            if (craft.matches(CraftingInput.of(2, 2, listOf(ItemStack(Items.HONEY_BLOCK), ItemStack(Items.MELON), ItemStack.EMPTY, ItemStack.EMPTY)), level)) f += "이끼 블록 없이 제작됨"
         }
-
-        val brew = rm.byKey(key("zomapo", "antidote_brewing")).orElse(null)?.value() as? BrewingRecipe
-        if (brew == null) f += "해독제 양조법 없음" else {
-            for (p in listOf(Potions.WATER, Potions.AWKWARD, Potions.MUNDANE, Potions.THICK)) {
-                val base = PotionContents.createItemStack(Items.POTION, p)
-                val input = BrewingInput(base, honey)
-                if (!brew.matches(input, level)) f += "양조법이 맞지 않음($p)"
-                else if (!ItemStack.isSameItemSameComponents(brew.assemble(input), ZomItems.antidote())) f += "양조 결과물 부품 불일치"
-            }
-            if (brew.matches(BrewingInput(PotionContents.createItemStack(Items.POTION, Potions.HEALING), honey), level)) f += "효과 있는 물약으로도 양조됨"
-            if (brew.matches(BrewingInput(ZomItems.antidote(), honey), level)) f += "해독제를 다시 양조함"
-        }
+        if (rm.byKey(key("zomapo", "antidote_brewing")).isPresent) f += "해독제 양조법이 남아 있음"
         val brewOthers = rm.getRecipes().count { h -> (h.value() as? BrewingRecipe)?.matches(BrewingInput(ZomItems.antidote(), ItemStack(Items.GUNPOWDER)), level) == true }
         if (brewOthers > 0) f += "해독제가 바닐라 양조법 재료로 쓰임: $brewOthers"
+        // 레시피북: zomApo 조합법이 표시 번호 맨 앞(레시피북 최상단)
+        val firstIds = mutableListOf<String>()
+        for (id in 0 until 2) runCatching { rm.getRecipeFromDisplay(net.minecraft.world.item.crafting.display.RecipeDisplayId(id))?.parent()?.id()?.identifier()?.namespace }.getOrNull()?.let { firstIds += it }
+        if (firstIds.isEmpty() || firstIds.any { it != "zomapo" }) f += "zomApo 조합법이 레시피북 맨 앞 번호가 아님: $firstIds"
 
         val spyglass = rm.byKey(key("minecraft", "spyglass")).orElse(null)?.value() as? CraftingRecipe
         if (spyglass != null) {
@@ -155,11 +141,11 @@ internal object ZomSmoke {
         try {
             val craft = server.recipeManager.byKey(key("zomapo", "bandage_crafting")).orElse(null)?.value() as? CraftingRecipe
             if (craft == null) f += "붕대 조합법 없음" else {
-                val input = CraftingInput.of(2, 1, listOf(ItemStack(Items.PAPER), ItemStack(Items.STRING)))
-                if (!craft.matches(input, level)) f += "붕대 조합법이 맞지 않음"
+                val input = CraftingInput.of(1, 1, listOf(ItemStack(Items.WOOL.red())))
+                if (!craft.matches(input, level)) f += "붕대 조합법이 맞지 않음(빨간 양털)"
                 else {
                     val out = craft.assemble(input)
-                    if (out.count != 2 || !ItemStack.isSameItemSameComponents(out, ZomItems.bandage())) f += "붕대 결과물 불일치: ${out.count} ${out.components}"
+                    if (out.count != 4 || !ItemStack.isSameItemSameComponents(out, ZomItems.bandage())) f += "붕대 결과물 불일치: ${out.count} ${out.components}"
                 }
             }
             val fake = FakePlayer.get(level)

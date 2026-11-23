@@ -21,14 +21,14 @@ class SpawnRulesTest {
     private val eps = 1e-9
 
     @Test
-    @DisplayName("밤 스폰률 1.5 + 0.1L, 낮 지상은 레벨 2부터 밤의 0.1배")
+    @DisplayName("밤 스폰률 2.0 + 0.15L, 낮 지상은 레벨 2부터 밤의 0.1배")
     fun case01() {
-        assertEquals(1.5, LevelRules.nightZombieRate(0), eps)
-        assertEquals(1.7, LevelRules.nightZombieRate(2), eps)
-        assertEquals(2.0, LevelRules.nightZombieRate(5), eps)
+        assertEquals(2.0, LevelRules.nightZombieRate(0), eps)
+        assertEquals(2.3, LevelRules.nightZombieRate(2), eps)
+        assertEquals(2.75, LevelRules.nightZombieRate(5), eps)
         assertEquals(0.0, LevelRules.dayZombieRate(1), eps)
-        assertEquals(0.17, LevelRules.dayZombieRate(2), eps)
-        assertEquals(0.2, LevelRules.dayZombieRate(5), eps)
+        assertEquals(0.23, LevelRules.dayZombieRate(2), eps)
+        assertEquals(0.275, LevelRules.dayZombieRate(5), eps)
     }
 
     @Test
@@ -141,7 +141,7 @@ class SpawnRulesTest {
         assertEquals(0.25, LevelRules.lightFactor(4), eps)
         assertEquals(0.0, LevelRules.lightFactor(5), eps)
         assertEquals(0.0, LevelRules.lightFactor(14), eps)
-        assertEquals(1.7 * 0.25, LevelRules.indoorZombieRate(2, 3), eps)
+        assertEquals(2.3 * 0.25, LevelRules.indoorZombieRate(2, 3), eps)
     }
 
     @Test

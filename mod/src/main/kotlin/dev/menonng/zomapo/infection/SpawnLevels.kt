@@ -40,7 +40,7 @@ import java.util.WeakHashMap
  * 스폰 레벨과 레벨 효과. docs/design/zombies.md '감염 레벨' 2절, '몹 좀비화' 1-2·2절.
  * - 자연 스폰 순간(finalizeSpawn, 믹스인) 청크 레벨을 개체에 굳힌다. 좀비 계열은 강화, 원종은 레벨이 차면 좀비화.
  * - 햇빛: Lv2 이상 출신은 타지 않는다(믹스인). 태양광 알레르기: 낮 동안 모든 좀비에(1초마다).
- * - 추가 스폰: 레벨에 따라 밤 좀비 ×1.5~2.0, Lv2 이상은 낮에도 밤의 0.1배(플레이어 주변에 덧붙인다).
+ * - 추가 스폰: 레벨에 따라 밤 좀비 ×2.0~2.75, Lv2 이상은 낮에도 밤의 0.1배(플레이어 주변에 덧붙인다).
  */
 object SpawnLevels {
     val SPAWN_LEVEL: AttachmentType<Int> = AttachmentRegistry.create(Identifier.fromNamespaceAndPath(ZomApo.MOD_ID, "spawn_level")) { b: AttachmentRegistry.Builder<Int> -> b.persistent(Codec.INT) }
@@ -165,7 +165,7 @@ object SpawnLevels {
         }
     }
 
-    /** 레벨에 따른 추가 좀비(밤 ×1.5~2.0, Lv2 이상 낮 0.1배). 10초마다 플레이어마다. */
+    /** 레벨에 따른 추가 좀비(밤 ×2.0~2.75, Lv2 이상 낮 0.1배). 10초마다 플레이어마다. */
     private fun extraSpawns(level: ServerLevel) {
         if (level.dimension() != net.minecraft.world.level.Level.OVERWORLD) return
         val day = level.isBrightOutside

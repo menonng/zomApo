@@ -16,6 +16,7 @@ object ZomApo : ModInitializer {
         log.info("zomApo 초기화")
         ZomConfig.load()
         WoundsSystem.register()
+        dev.menonng.zomapo.item.ZomItems.register()
         ZomCommands.register()
         Zombified.register()
         dev.menonng.zomapo.infection.Infection.register()

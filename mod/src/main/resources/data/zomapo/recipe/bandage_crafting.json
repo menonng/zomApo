@@ -1,13 +1,12 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
+  "category": "building",
   "ingredients": [
-    "minecraft:paper",
-    "minecraft:string"
+    "#minecraft:wool"
   ],
   "result": {
     "id": "minecraft:paper",
-    "count": 2,
+    "count": 4,
     "components": {
       "minecraft:item_name": {
         "translate": "item.zomapo.bandage",

@@ -1,18 +1,19 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
+  "category": "building",
   "ingredients": [
-    "minecraft:honey_bottle",
+    "minecraft:honey_block",
     [
-      "minecraft:glistering_melon_slice",
-      "minecraft:golden_carrot"
+      "minecraft:melon",
+      "minecraft:pumpkin"
     ],
-    "minecraft:rotten_flesh"
+    "minecraft:moss_block"
   ],
   "result": {
     "id": "minecraft:potion",
-    "count": 1,
+    "count": 3,
     "components": {
+      "minecraft:max_stack_size": 16,
       "minecraft:potion_contents": {
         "custom_color": 14856762,
         "custom_name": "zomapo_antidote"

@@ -15,8 +15,8 @@ object LevelRules {
     /** 일정 레벨(소수) → 규칙에 쓰는 정수 레벨. */
     fun level(raw: Double): Int = floor(raw).toInt().coerceIn(0, MAX_LEVEL)
 
-    /** 밤(또는 빛 0인 곳) 좀비 계열 스폰률 배율: 1.5 + 0.1 × 레벨. 바닐라 대비. */
-    fun nightZombieRate(level: Int): Double = 1.5 + 0.1 * level.coerceIn(0, MAX_LEVEL)
+    /** 밤(또는 빛 0인 곳) 좀비 계열 스폰률 배율: 2.0 + 0.15 × 레벨. 바닐라 대비(2026-11-23 상향: Lv0 도 ×2.0). */
+    fun nightZombieRate(level: Int): Double = 2.0 + 0.15 * level.coerceIn(0, MAX_LEVEL)
 
     /** 낮 지상(하늘빛이 드는 곳) 스폰은 레벨 2 이상에서만, 그 레벨 밤 배율의 0.1배. */
     fun dayZombieRate(level: Int): Double = if (level >= DAY_SPAWN_FROM) 0.1 * nightZombieRate(level) else 0.0
